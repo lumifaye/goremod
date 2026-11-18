@@ -73,6 +73,36 @@ KPADStatus last_kpad = {0};
 int kpad_timeout = 10;
 static VPADStatus s_last_vpad = { 0 };
 static int s_vpad_timeout = 10;
+static bool s_touch_down = false;
+static bool s_touch_pending = false;
+static unsigned int s_touch_age = 0;
+static float s_touch_x, s_touch_y;
+
+bool controller_wiiu_touch_pressed(float *x, float *y) {
+    if (!s_touch_pending || x == NULL || y == NULL) return false;
+    s_touch_pending = false;
+    *x = s_touch_x;
+    *y = s_touch_y;
+    return true;
+}
+
+static void controller_wiiu_touch_sample(const VPADStatus *status) {
+    VPADTouchData point;
+    VPADGetTPCalibratedPointEx(VPAD_CHAN_0, VPAD_TP_854X480, &point, &status->tpNormal);
+    if (!point.touched) {
+        s_touch_down = false;
+        return;
+    }
+    if (point.validity != VPAD_VALID) return;
+    if (!s_touch_down && !s_touch_pending) {
+        s_touch_x = (float)point.x / 854.0f;
+        s_touch_y = (float)point.y / 480.0f;
+        s_touch_pending = true;
+        s_touch_age = 0;
+    }
+    s_touch_down = true;
+}
+
 
 enum WiiUDebugSource {
     WIIU_DEBUG_SOURCE_NONE = 0,
@@ -209,6 +239,7 @@ static bool read_vpad(OSContPad *pad) {
     } else {
         s_vpad_timeout = 10;
         s_last_vpad = status;
+        controller_wiiu_touch_sample(&status);
     }
 
     // Include edge bits so quick presses still register in menu/UI flows.
@@ -444,6 +475,7 @@ static void controller_wiiu_debug_log_state(const OSContPad *pad, bool hasInput,
 }
 
 static void controller_wiiu_read(OSContPad* pad) {
+    if (s_touch_pending && ++s_touch_age > 2) s_touch_pending = false;
     bool hasInput = false;
     unsigned int selectedGamepad = 0;
 
@@ -452,10 +484,14 @@ static void controller_wiiu_read(OSContPad* pad) {
     pad->button = 0;
 
     if (configDisableGamepads) {
+        s_touch_pending = false;
+        s_touch_down = false;
         return;
     }
 
     if (!configBackgroundGamepad && gWindowApi != NULL && gWindowApi->has_focus != NULL && !gWindowApi->has_focus()) {
+        s_touch_pending = false;
+        s_touch_down = false;
         return;
     }
 
@@ -466,9 +502,13 @@ static void controller_wiiu_read(OSContPad* pad) {
     s_dbg_raw_main = 0;
     s_dbg_raw_aux = 0;
 
+    OSContPad vpad = { 0 };
+    bool vpadHasInput = controller_wiiu_try_vpad_input(&vpad);
+
     // Wii U mapping: 0 = GamePad (VPAD), 1..4 = WPAD channels 0..3.
     if (selectedGamepad == 0) {
-        hasInput = controller_wiiu_try_vpad_input(pad);
+        hasInput = vpadHasInput;
+        if (hasInput) *pad = vpad;
         if (!hasInput) {
             for (int channel = 0; channel < 4; channel++) {
                 if (controller_wiiu_try_wpad_input(pad, channel)) {
@@ -485,7 +525,8 @@ static void controller_wiiu_read(OSContPad* pad) {
         hasInput = controller_wiiu_try_wpad_input(pad, wpadChannel);
         if (!hasInput) {
             // Fallback so a stale gamepad selection does not silently disable controls.
-            hasInput = controller_wiiu_try_vpad_input(pad);
+            hasInput = vpadHasInput;
+            if (hasInput) *pad = vpad;
         }
         if (!hasInput) {
             for (int channel = 0; channel < 4; channel++) {

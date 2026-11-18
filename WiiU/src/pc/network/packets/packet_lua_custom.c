@@ -154,6 +154,8 @@ void network_send_lua_custom(bool broadcast) {
     }
 }
 
+int gGorePacketSender = -1;
+
 void network_receive_lua_custom(struct Packet* p) {
     LUA_CUSTOM_TRACE("lua-custom-enter: local=%u gLuaState=%p dataLength=%u\n",
                      (unsigned)p->localIndex,
@@ -246,7 +248,10 @@ void network_receive_lua_custom(struct Packet* p) {
                          (unsigned)p->localIndex,
                          (unsigned)keyCount);
     }
+    int previousGorePacketSender = gGorePacketSender;
+    gGorePacketSender = p->localIndex;
     smlua_call_event_hooks(HOOK_ON_PACKET_RECEIVE, modIndex, tableIndex);
+    gGorePacketSender = previousGorePacketSender;
 cleanup:
     lua_pop(L, 1); // pop table
 }

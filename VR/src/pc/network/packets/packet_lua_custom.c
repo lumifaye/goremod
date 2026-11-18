@@ -95,6 +95,8 @@ void network_send_lua_custom(bool broadcast) {
     }
 }
 
+int gGorePacketSender = -1;
+
 void network_receive_lua_custom(struct Packet* p) {
     lua_State* L = gLuaState;
     u16 modIndex = 0;
@@ -127,7 +129,10 @@ void network_receive_lua_custom(struct Packet* p) {
         lua_settable(L, -3);
     }
 
+    int previousGorePacketSender = gGorePacketSender;
+    gGorePacketSender = p->localIndex;
     smlua_call_event_hooks(HOOK_ON_PACKET_RECEIVE, modIndex, tableIndex);
+    gGorePacketSender = previousGorePacketSender;
     lua_pop(L, 1); // pop table
 }
 

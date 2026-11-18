@@ -61,6 +61,7 @@ opt("host", "enemy_small",    "Small enemies",                           GORE_SM
     return "Small enemies: " .. (sSmallEnemyLabels[v] or "?")
 end)
 opt("host", "enemy_fling",    "Bullies & boulders fling you (rag doll)", false)
+opt("host", "wiiu_touch_fling", "Let Wii U players tap to fling", false)
 opt("host", "enemy_real",     "Every enemy hurts the way it would",      false)
 opt("host", "enemy_damage",   "Enemy damage",                            1, 1, 8, function(v)
     return "Enemy damage: x" .. v .. (v == 1 and " (normal)" or "")
@@ -209,7 +210,7 @@ do
                 v = storage_read(d)
             end
             gOpt[d.key] = v
-            if d.scope == "host" then
+            if d.scope == "host" and (d.key ~= "wiiu_touch_fling" or isServer) then
                 gGlobalSyncTable[d.sync] = v
             end
         end
@@ -304,7 +305,13 @@ local function refresh_options()
     local changed = sFirstRefresh
     for _, d in ipairs(sDefs) do
         if d.key and d.scope == "host" then
-            local v = sanitize(d, gGlobalSyncTable[d.sync])
+            local v
+            if d.key == "wiiu_touch_fling" and network_is_server() then
+                v = gOpt[d.key]
+                if gGlobalSyncTable[d.sync] ~= v then gGlobalSyncTable[d.sync] = v end
+            else
+                v = sanitize(d, gGlobalSyncTable[d.sync])
+            end
             if gOpt[d.key] ~= v then
                 gOpt[d.key] = v
                 changed = true
@@ -383,7 +390,7 @@ do
             local v = d.default
             if isServer then v = storage_read(d) end
             gOpt[d.key] = v
-            gGlobalSyncTable[d.sync] = v
+            if d.key ~= "wiiu_touch_fling" or isServer then gGlobalSyncTable[d.sync] = v end
         end
     end
     local stored = mod_storage_load("opt_enemy_small")

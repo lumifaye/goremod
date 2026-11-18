@@ -14,6 +14,7 @@
 #include "engine/math_util.h"
 #include "engine/level_script.h"
 #include "pc/djui/djui_hud_utils.h"
+#include "pc/network/network_player.h"
 #include "pc/utils/misc.h"
 #include "include/level_misc_macros.h"
 #include "include/macro_presets.h"
@@ -1093,8 +1094,37 @@ int smlua_func_return_self(lua_State* L) {
  // bind //
 //////////
 
+extern int gGorePacketSender;
+
+static int smlua_func_gore_packet_sender(lua_State* L) {
+    if (gGorePacketSender < 1 || gGorePacketSender >= MAX_PLAYERS) {
+        lua_pushnil(L);
+    } else {
+        lua_pushinteger(L, gGorePacketSender);
+    }
+    return 1;
+}
+
+#ifdef TARGET_WII_U
+#include "pc/controller/controller_wiiu.h"
+static int smlua_func_wiiu_touch_pressed(lua_State* L) {
+    float x, y;
+    if (!controller_wiiu_touch_pressed(&x, &y)) {
+        return 0;
+    }
+    lua_pushnumber(L, x);
+    lua_pushnumber(L, y);
+    return 2;
+}
+#endif
+
 void smlua_bind_functions(void) {
     lua_State* L = gLuaState;
+
+    smlua_bind_function(L, "gore_packet_sender", smlua_func_gore_packet_sender);
+#ifdef TARGET_WII_U
+    smlua_bind_function(L, "wiiu_touch_pressed", smlua_func_wiiu_touch_pressed);
+#endif
 
     // misc
     smlua_bind_function(L, "table_copy", smlua_func_table_copy);
