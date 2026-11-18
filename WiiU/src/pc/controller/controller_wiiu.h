@@ -6,5 +6,6 @@
 
 extern struct ControllerAPI controller_wiiu;
 bool controller_wiiu_touch_pressed(float *x, float *y);
+bool controller_wiiu_touch_state(float *x, float *y);
 
 #endif

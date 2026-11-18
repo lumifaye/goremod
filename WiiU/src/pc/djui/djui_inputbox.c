@@ -7,6 +7,10 @@
 #include "pc/pc_main.h"
 #include "game/segment2.h"
 #include "pc/controller/controller_keyboard.h"
+#ifdef TARGET_WII_U
+#include "pc/wiiu_keyboard.h"
+static struct DjuiBase *sWiiuKeyboardFocus = NULL;
+#endif
 
 #define DJUI_INPUTBOX_YOFF (-3)
 #define DJUI_INPUTBOX_MAX_BLINK 50
@@ -342,11 +346,47 @@ void djui_inputbox_on_focus_begin(UNUSED struct DjuiBase* base) {
     gDjuiInputHeldControl = 0;
     gDjuiInputHeldAlt     = 0;
     gWindowApi->start_text_input();
+#ifdef TARGET_WII_U
+    if (sWiiuKeyboardFocus != base || !wiiu_keyboard_active()) {
+        struct DjuiInputbox *inputbox = (struct DjuiInputbox *)base;
+        sWiiuKeyboardFocus = wiiu_keyboard_open(inputbox->buffer, inputbox->bufferSize, inputbox->passwordChar[0] != 0) ? base : NULL;
+    }
+#endif
 }
 
 void djui_inputbox_on_focus_end(UNUSED struct DjuiBase* base) {
     gWindowApi->stop_text_input();
+#ifdef TARGET_WII_U
+    if (sWiiuKeyboardFocus == base) {
+        sWiiuKeyboardFocus = NULL;
+        wiiu_keyboard_cancel();
+    }
+#endif
 }
+
+#ifdef TARGET_WII_U
+void djui_inputbox_wiiu_keyboard_update(void) {
+    if (sWiiuKeyboardFocus != gInteractableFocus) {
+        sWiiuKeyboardFocus = NULL;
+        wiiu_keyboard_cancel();
+        return;
+    }
+    if (!sWiiuKeyboardFocus) return;
+    struct DjuiInputbox *inputbox = (struct DjuiInputbox *)sWiiuKeyboardFocus;
+    char *text = malloc(inputbox->bufferSize);
+    if (!text) return;
+    int result = wiiu_keyboard_take_result(text, inputbox->bufferSize);
+    if (result > 0) {
+        djui_inputbox_select_all(inputbox);
+        djui_interactable_on_key_down(SCANCODE_BACKSPACE);
+        if (gInteractableFocus == sWiiuKeyboardFocus && text[0]) djui_interactable_on_text_input(text);
+        if (gInteractableFocus == sWiiuKeyboardFocus) djui_interactable_on_key_down(SCANCODE_ENTER);
+    } else if (result < 0) {
+        djui_interactable_on_key_down(SCANCODE_ESCAPE);
+    }
+    free(text);
+}
+#endif
 
 void djui_inputbox_on_text_input(struct DjuiBase *base, char* text) {
     struct DjuiInputbox *inputbox = (struct DjuiInputbox *) base;

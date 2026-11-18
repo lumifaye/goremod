@@ -1,3 +1,4 @@
+#include "../wiiu_keyboard.h"
 #ifdef TARGET_WII_U
 
 #include <macros.h>
@@ -89,6 +90,7 @@ static void gfx_gx2_window_exit_callback(void)
     gfx_gx2_free_vbo();
     gfx_gx2_free();
 
+    wiiu_keyboard_shutdown();
     KPADShutdown();
     AXQuit();
 
@@ -518,6 +520,8 @@ static void gfx_gx2_window_swap_buffers_begin(void)
 
     // Copy the color buffer to the TV and DRC scan buffers
     GX2CopyColorBufferToScanBuffer(&g_color_buffer, GX2_SCAN_TARGET_TV);
+    // The keyboard is GamePad-only; the TV receives the unmodified game frame.
+    wiiu_keyboard_draw_drc();
     GX2CopyColorBufferToScanBuffer(&g_color_buffer, GX2_SCAN_TARGET_DRC);
     // Flip
     GX2SwapScanBuffers();

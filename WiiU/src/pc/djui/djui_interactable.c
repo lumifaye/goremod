@@ -8,6 +8,10 @@
 #include "pc/controller/controller_sdl.h"
 #include "pc/controller/controller_mouse.h"
 #include "pc/controller/controller_keyboard.h"
+#ifdef TARGET_WII_U
+#include "pc/controller/controller_wiiu.h"
+#include "pc/wiiu_keyboard.h"
+#endif
 #include "pc/utils/misc.h"
 #include "pc/network/network.h"
 
@@ -416,6 +420,15 @@ void djui_interactable_update_pad(void) {
 }
 
 void djui_interactable_update(void) {
+#ifdef TARGET_WII_U
+    if (wiiu_keyboard_active()) {
+        gInteractableMouseDown = NULL;
+        gDjuiCursorDownOn = NULL;
+        sLastMouseButtons = 0;
+        sLastInteractablePad = gInteractablePad;
+        return;
+    }
+#endif
     // update pad
     djui_interactable_update_pad();
 
@@ -424,6 +437,11 @@ void djui_interactable_update(void) {
     u16 padButtons = 0;
     if (!sIgnoreAllInputsWhenBinding) {
         mouseButtons = mouse_window_buttons;
+#ifdef TARGET_WII_U
+        if (djui_panel_is_active() && controller_wiiu_touch_state(NULL, NULL)) {
+            mouseButtons |= L_MOUSE_BUTTON;
+        }
+#endif
         padButtons = gInteractablePad.button;
         if (sIgnoreInteractableUntilCursorReleased) {
             if ((padButtons & PAD_BUTTON_A) || (mouseButtons & L_MOUSE_BUTTON)) {
@@ -434,6 +452,18 @@ void djui_interactable_update(void) {
             }
         }
     }
+
+#ifdef TARGET_WII_U
+    // Unlike a mouse, a touch can arrive at a new position and press in the
+    // same frame. Refresh the hit target before dispatching the press.
+    if ((mouseButtons & L_MOUSE_BUTTON) && !(sLastMouseButtons & L_MOUSE_BUTTON)) {
+        struct DjuiBase* lastHovered = gDjuiHovered;
+        gDjuiHovered = NULL;
+        djui_interactable_cursor_update_active(&gDjuiRoot->base);
+        if (lastHovered != gDjuiHovered) djui_interactable_on_hover_end(lastHovered);
+        djui_interactable_on_hover(gDjuiHovered);
+    }
+#endif
 
     // update focused
     if (gInteractableFocus) {

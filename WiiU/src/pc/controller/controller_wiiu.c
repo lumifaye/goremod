@@ -15,6 +15,9 @@
 #include "controller_api.h"
 #include "../configfile.h"
 #include "../pc_main.h"
+#include "../wiiu_keyboard.h"
+#include "../djui/djui.h"
+#include "../djui/djui_panel.h"
 
 #define VK_BASE_WIIU 0x2000
 
@@ -77,10 +80,18 @@ static bool s_touch_down = false;
 static bool s_touch_pending = false;
 static unsigned int s_touch_age = 0;
 static float s_touch_x, s_touch_y;
+static float s_touch_current_x, s_touch_current_y;
+
+bool controller_wiiu_touch_state(float *x, float *y) {
+    if (x) *x = s_touch_current_x;
+    if (y) *y = s_touch_current_y;
+    return s_touch_down;
+}
 
 bool controller_wiiu_touch_pressed(float *x, float *y) {
     if (!s_touch_pending || x == NULL || y == NULL) return false;
     s_touch_pending = false;
+    if (wiiu_keyboard_active() || djui_panel_is_active() || gDjuiChatBoxFocus || gDjuiConsoleFocus) return false;
     *x = s_touch_x;
     *y = s_touch_y;
     return true;
@@ -94,6 +105,8 @@ static void controller_wiiu_touch_sample(const VPADStatus *status) {
         return;
     }
     if (point.validity != VPAD_VALID) return;
+    s_touch_current_x = fminf(1.0f, (float)point.x / 854.0f);
+    s_touch_current_y = fminf(1.0f, (float)point.y / 480.0f);
     if (!s_touch_down && !s_touch_pending) {
         s_touch_x = (float)point.x / 854.0f;
         s_touch_y = (float)point.y / 480.0f;
@@ -230,16 +243,25 @@ static bool read_vpad(OSContPad *pad) {
     if (read <= 0 || err != VPAD_READ_SUCCESS) {
         if ((err == VPAD_READ_NO_SAMPLES || err == VPAD_READ_BUSY) && s_vpad_timeout > 0) {
             status = s_last_vpad;
+            if (wiiu_keyboard_active()) memset(&status, 0, sizeof(status));
             status.trigger = 0;
             status.release = 0;
             s_vpad_timeout--;
         } else {
+            s_touch_down = false;
+            s_touch_pending = false;
             return false;
         }
     } else {
         s_vpad_timeout = 10;
         s_last_vpad = status;
-        controller_wiiu_touch_sample(&status);
+        if (wiiu_keyboard_input(&status)) {
+            s_touch_pending = false;
+            s_touch_down = false;
+            memset(&status, 0, sizeof(status));
+        } else {
+            controller_wiiu_touch_sample(&status);
+        }
     }
 
     // Include edge bits so quick presses still register in menu/UI flows.

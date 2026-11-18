@@ -14,6 +14,10 @@ assert controller[read_start:read_end].count('controller_wiiu_try_vpad_input(') 
 prelude = '''#include <stdbool.h>
 #include <stddef.h>
 #include <assert.h>
+#include <math.h>
+static bool panel_active = false, gDjuiChatBoxFocus = false, gDjuiConsoleFocus = false, keyboard_active = false;
+static bool djui_panel_is_active(void) { return panel_active; }
+static bool wiiu_keyboard_active(void) { return keyboard_active; }
 #define VPAD_CHAN_0 0
 #define VPAD_TP_854X480 2
 #define VPAD_VALID 0
@@ -38,6 +42,17 @@ int main(void) {
     s.tpNormal.validity = 0; controller_wiiu_touch_sample(&s);
     assert(controller_wiiu_touch_pressed(&x, &y));
     assert(!controller_wiiu_touch_pressed(&x, &y));
+    assert(controller_wiiu_touch_state(&x, &y) && x == 0.5f && y == 0.5f);
+    s.tpNormal.x = 854; s.tpNormal.y = 480; controller_wiiu_touch_sample(&s);
+    assert(controller_wiiu_touch_state(&x, &y) && x == 1.0f && y == 1.0f);
+    s.tpNormal.touched = 0; controller_wiiu_touch_sample(&s);
+    assert(!controller_wiiu_touch_state(NULL, NULL));
+    panel_active = true; s.tpNormal.touched = 1; controller_wiiu_touch_sample(&s);
+    assert(!controller_wiiu_touch_pressed(&x, &y));
+    panel_active = false; assert(!controller_wiiu_touch_pressed(&x, &y));
+    s.tpNormal.touched = 0; controller_wiiu_touch_sample(&s);
+    keyboard_active = true; s.tpNormal.touched = 1; controller_wiiu_touch_sample(&s);
+    assert(!controller_wiiu_touch_pressed(&x, &y));
 }
 '''
 binding_pre = '''#include <assert.h>
@@ -60,7 +75,7 @@ int main(void) {
 def run_c(text, folder, name):
     source, binary = folder / (name + '.c'), folder / name
     source.write_text(text)
-    subprocess.run([os.environ.get('CC', 'cc'), '-std=c11', '-Wall', '-Wextra', '-Werror', str(source), '-o', str(binary)], check=True)
+    subprocess.run([os.environ.get('CC', 'cc'), '-std=c11', '-Wall', '-Wextra', '-Werror', str(source), '-o', str(binary), '-lm'], check=True)
     subprocess.run([str(binary)], check=True)
 
 with tempfile.TemporaryDirectory() as tmp:

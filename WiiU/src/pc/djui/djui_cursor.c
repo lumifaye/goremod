@@ -3,6 +3,9 @@
 #include "pc/controller/controller_mouse.h"
 #include "pc/gfx/gfx_window_manager_api.h"
 #include "pc/pc_main.h"
+#ifdef TARGET_WII_U
+#include "pc/controller/controller_wiiu.h"
+#endif
 
 #define CURSOR_GFX_MAX_SIZE 20
 
@@ -166,7 +169,15 @@ static void djui_cursor_update_position(void) {
     if (sMouseCursor == NULL) { return; }
     if (!djui_panel_is_active()) { return; }
 
-    if (sInputControlledBase != NULL) {
+    float touchX, touchY;
+    if (controller_wiiu_touch_state(&touchX, &touchY)) {
+        u32 width, height;
+        gfx_get_dimensions(&width, &height);
+        sCursorMouseControlled = true;
+        gCursorX = touchX * width / djui_gfx_get_scale();
+        gCursorY = touchY * height / djui_gfx_get_scale();
+        djui_cursor_set_visible(true);
+    } else if (!sCursorMouseControlled && sInputControlledBase != NULL) {
         djui_cursor_base_hover_location(sInputControlledBase, &gCursorX, &gCursorY);
     }
 
