@@ -2,7 +2,7 @@
 
     python3 fork/ci_report.py <name> <file> [<file>...]
 
-Used by .github/workflows/build-wiiu.yml for the list of compiler errors. One check holds 65,000 letters; a
+Used by .github/workflows/build-fork.yml for the list of compiler errors. One check holds 65,000 letters; a
 longer file becomes several ("<name> 1/3", ...). Needs GITHUB_TOKEN (with "checks: write"), GITHUB_REPOSITORY
 and GITHUB_SHA, which a workflow has. Never fails the step it runs in.
 """

@@ -8,7 +8,7 @@ on:
         description: Which builds
         type: choice
         default: all
-        options: [all, pc, linux, macos, pcvr, android, quest]
+        options: [all, pc, linux, macos, pcvr, android, quest, wiiu]
   push:
 
 permissions:
@@ -497,13 +497,164 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+  wiiu:
+    name: Wii U (${{ matrix.title }})
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'wiiu')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build wiiu]') || contains(github.event.head_commit.message, '[wiiu]')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    container: devkitpro/devkitppc:latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: fork
+            title: Realism64
+            file: Realism64-WiiU
+          - variant: game
+            title: SM64 CoopDX
+            file: SM64CoopDX-WiiU
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEBIAN_FRONTEND: noninteractive
+      VARIANT: ${{ matrix.variant }}
+      TITLE: ${{ matrix.title }}
+      FILE: ${{ matrix.file }}
+    steps:
+      - name: Programs the build needs besides the compiler
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git ca-certificates build-essential python3 rsync bsdextrautils zlib1g-dev pkg-config zip
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/VR/
+            !/Android/
+
+      - name: What the container has
+        if: matrix.variant == 'game'
+        run: |
+          OUT="$GITHUB_WORKSPACE/ci-out"; mkdir -p "$OUT"
+          {
+            echo "DEVKITPRO=$DEVKITPRO DEVKITPPC=$DEVKITPPC"
+            "$DEVKITPPC/bin/powerpc-eabi-gcc" --version | head -1
+            (dkp-pacman -Q 2>/dev/null || pacman -Q 2>/dev/null) | tr '\n' ' '
+            echo
+            echo "--- wut/lib"; ls "$DEVKITPRO/wut/lib" "$DEVKITPRO/wut/share" 2>&1 | tr '\n' ' '
+            echo
+            echo "--- portlibs/wiiu/lib"; ls "$DEVKITPRO/portlibs/wiiu/lib" 2>&1 | tr '\n' ' '
+            echo
+            echo "--- portlibs/ppc/lib"; ls "$DEVKITPRO/portlibs/ppc/lib" 2>&1 | tr '\n' ' '
+            echo
+            echo "--- tools"; ls "$DEVKITPRO/tools/bin" 2>&1 | tr '\n' ' '
+            echo
+            for p in elf2rpl wuhbtool rsync hexdump python3 gcc g++ make zip; do printf '%s: ' "$p"; command -v "$p" || echo MISSING; done
+          } > "$OUT/container.txt" 2>&1
+          cat "$OUT/container.txt"
+          python3 fork/ci_report.py "Wii U: container" "$OUT/container.txt"
+
+      - name: This project's changes (fork/apply.py)
+        if: matrix.variant == 'fork'
+        run: |
+          OUT="$GITHUB_WORKSPACE/ci-out"; mkdir -p "$OUT"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          set +e
+          python3 fork/apply.py pc WiiU > "$OUT/apply.txt" 2>&1
+          status=$?
+          set -e
+          tail -n 40 "$OUT/apply.txt"
+          python3 fork/ci_report.py "Wii U ($TITLE): changes" "$OUT/apply.txt"
+          exit "$status"
+
+      - name: Build
+        id: build
+        working-directory: WiiU
+        run: |
+          OUT="$GITHUB_WORKSPACE/ci-out"; mkdir -p "$OUT"
+          export PATH="$DEVKITPRO/tools/bin:$DEVKITPPC/bin:$PATH"
+          set +e
+          make -k -j"$(nproc)" TARGET_WII_U=1 > "$OUT/build.log" 2>&1
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            if [ "$VARIANT" = fork ]; then
+              make TARGET_WII_U=1 wuhb WUHB_NAME="Realism64" WUHB_SHORT_NAME="Realism64" WUHB_AUTHOR="lumifaye" \
+                WUHB_ICON="$GITHUB_WORKSPACE/fork/icon/icon.png" >> "$OUT/build.log" 2>&1
+            else
+              make TARGET_WII_U=1 wuhb >> "$OUT/build.log" 2>&1
+            fi
+            status=$?
+          fi
+          set -e
+          sed -i -e 's/\x1b\[[0-9;]*[A-Za-z]//g' "$OUT/build.log"
+          tail -n 60 "$OUT/build.log"
+          grep -n -E '(^|[^a-z_])(fatal error|error)[: ]|undefined reference|multiple definition|cannot find|No such file|No rule to make|\*\*\*|not found|ld returned' "$OUT/build.log" \
+            | grep -v -E 'Werror|Wno-error' | cut -c1-400 > "$OUT/errors.txt" || true
+          grep -v '^Writing /content/' "$OUT/build.log" | tail -n 120 | cut -c1-600 > "$OUT/tail.txt"
+          {
+            ls -l build/us_wiiu/*.rpx build/us_wiiu/*.wuhb 2>&1
+            echo "--- warnings: $(grep -c 'warning:' "$OUT/build.log")"
+            echo "--- files packed into the .wuhb: $(grep -c '^Writing /content/' "$OUT/build.log")"
+            echo "--- mods in the .wuhb:"; ls build/us_wiiu/wuhb_content/mods 2>&1
+            echo "--- size of the program's parts"; powerpc-eabi-size build/us_wiiu/*.elf 2>&1
+            echo "--- system libraries the .rpx asks the console for"
+            powerpc-eabi-readelf -S --wide build/us_wiiu/*.rpx 2>&1 | grep -o 'import_[A-Za-z0-9_]*' | sort -u | tr '\n' ' '
+            echo
+          } > "$OUT/out.txt" 2>&1 || true
+          cd ..
+          python3 fork/ci_report.py "Wii U ($TITLE): errors" "$OUT/errors.txt"
+          python3 fork/ci_report.py "Wii U ($TITLE): last lines" "$OUT/tail.txt"
+          python3 fork/ci_report.py "Wii U ($TITLE): files" "$OUT/out.txt"
+          exit "$status"
+
+      - name: Pack for the SD card
+        run: |
+          OUT="$GITHUB_WORKSPACE/ci-out"
+          SD="$OUT/sd"; APP="$SD/wiiu/apps/sm64coopdx"
+          mkdir -p "$APP/roms" "$APP/mods" "$OUT/dist"
+          cp WiiU/build/us_wiiu/sm64coopdx.us.wuhb "$APP/$FILE.wuhb"
+          cp WiiU/build/us_wiiu/sm64coopdx.us.rpx "$OUT/dist/$FILE.rpx"
+          cp fork/wiiu-readme.txt "$SD/README-$FILE.txt"
+          (cd "$SD" && zip -q -r "$OUT/dist/$FILE.zip" .)
+          ls -l "$OUT/dist"
+          unzip -l "$OUT/dist/$FILE.zip" || true
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiiu-build-log-${{ matrix.variant }}
+          path: ci-out/build.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Keep the build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-wiiu-${{ matrix.variant }}
+          path: |
+            ci-out/dist/*.zip
+            ci-out/dist/*.rpx
+          if-no-files-found: error
+          retention-days: 14
+
+
   release:
     name: Release
-    needs: [pc, linux, macos, pcvr, android, quest]
+    needs: [pc, linux, macos, pcvr, android, quest, wiiu]
     if: >-
       always() && !cancelled() &&
       (needs.pc.result == 'success' || needs.linux.result == 'success' || needs.macos.result != 'skipped' ||
-       needs.pcvr.result == 'success' || needs.android.result == 'success' || needs.quest.result == 'success')
+       needs.pcvr.result == 'success' || needs.android.result == 'success' || needs.quest.result == 'success' ||
+       needs.wiiu.result != 'skipped')
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:

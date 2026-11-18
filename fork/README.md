@@ -30,9 +30,9 @@ windows builds use the original games' saves and settings folders. android insta
 
 ## building
 
-run `build-fork.yml` from Actions or put `[build]` in a commit message. for individual builds use `[build pc]`, `[build linux]`, `[build macos]`, `[build pcvr]`, `[build android]` or `[build quest]`. for wii u use `[wiiu]` or run `build-wiiu.yml` from Actions. use `[skip ci]` to skip workflow runs on a push. private repos use Actions minutes
+run `build-fork.yml` from Actions or put `[build]` in a commit message to build everything, including wii u. for individual builds use `[build pc]`, `[build linux]`, `[build macos]`, `[build pcvr]`, `[build android]`, `[build quest]` or `[build wiiu]` (`[wiiu]` works too). use `[skip ci]` to skip workflow runs on a push
 
-the releases have whatever builds succeeded. a full build becomes the latest release, partial builds don't. wii u builds are prereleases
+the releases have whatever builds succeeded. all new builds are prereleases
 
 to apply the changes by hand use `python3 fork/apply.py pc game` (use `vr` or `android` for those bases). `PC`, `VR` and `Android` are copies of the upstream sources so don't edit them for this project. changes go in `fork/apply.py` and the mod files. `WiiU` is the wii u port with project changes
 
