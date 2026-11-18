@@ -105,6 +105,10 @@ void Connection::Receive() {
     // limit the buffer to the available amount
     SocketLimitBuffer(mSocket, &remaining);
 
+#ifdef __WIIU__
+    if (remaining <= 0) { remaining = 1; }
+#endif
+
 #ifdef OSX_BUILD
     // OSX seems to return errno 0, size 0 on recv() when there is nothing to receive.
     // This causes the socket to think the connection is closed...
