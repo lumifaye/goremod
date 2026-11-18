@@ -39,7 +39,7 @@ if [ -n "$missing" ]; then
 fi
 
 {
-    echo "SM64 Coop DX with GORE / Hard-Mode built in. [Commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) | [Build run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+    echo "My realism-focused version of SM64 Coop DX. [Commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) | [Build run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
     echo
     echo "| File | For |"
     echo "|---|---|"

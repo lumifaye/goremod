@@ -4,7 +4,7 @@ tag="wiiu-$GITHUB_RUN_NUMBER"
 commit="${GITHUB_SHA:0:7}"
 notes="$(mktemp)"
 
-all="Realism64-WiiU.zip|Realism64|With GORE / Hard-Mode built in.
+all="Realism64-WiiU.zip|Realism64|My realism-focused version.
 SM64CoopDX-WiiU.zip|SM64 CoopDX|SM64 Coop DX without this project's changes.
 Realism64-WiiU.rpx|Realism64 (.rpx)|Program only; use the zip for the full package.
 SM64CoopDX-WiiU.rpx|SM64 CoopDX (.rpx)|Program only; use the zip for the full package."

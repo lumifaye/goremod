@@ -1,6 +1,8 @@
 # Realism64
 
-SM64 Coop DX with GORE / Hard-Mode built in, a 30,000 object limit, and PC, VR, Android and Wii U builds. The builds use their own CoopNet name (`lumi64`), so they don't join the official game's lobbies.
+My realism-focused version of SM64 Coop DX, with a 30,000 object limit and PC, VR, Android and Wii U builds. The mod started as GORE / Hard-Mode, but I've heavily edited it and made it more of a realism mode.
+
+The builds use their own CoopNet name (`lumi64`), so they don't join the official game's lobbies.
 
 You need your own Super Mario 64 US ROM. It's not included.
 
@@ -18,7 +20,7 @@ Linux needs SDL2, OpenGL, libcurl and zlib. On Mac, you might need to allow the 
 
 ## What's different
 
-- Gore is built in, with its settings under **Gore Settings**. Other included mods are in the mods menu.
+- My edited realism mod is built in, with its settings under **Gore Settings**. Other included mods are in the mods menu.
 - VR and flat-screen players share lobbies. VR hands and some VR items are shown to other players. VR head turning is disabled because it looked wrong in testing.
 - Voice chat works between the flat and VR builds. The microphone starts off. Wii U sound and voice chat haven't been tested on a console.
 - Character Select bodies keep their character where possible. Multiplayer blood, caps and bodies use the host's save.
@@ -40,8 +42,10 @@ Upload a mod zip to the repo in `MODS_REPO` in `fork/apply.py`, then build. Mods
 
 ## Credits and licenses
 
-GORE / Hard-Mode! is by the GORE Team: IncredibleHolc, Cooliokid956, Blocky.cmd, Birdekek, Saniky, Tilly, Isaac, Frijoles, ProfeJavix and I'mYourCat.
+This version is my fork of SM64 Coop DX by the Coop DX team, the VR fork by fulldivegames, and the Android port by ManIsCat2. The Wii U port is by efsmert.
 
-SM64 Coop DX is by the Coop DX team. The VR fork is by fulldivegames, the Android port by ManIsCat2, and the Wii U port by efsmert. Wii U builds include CoopNet (GNU AGPL v3) and libjuice (MPL 2.0); their source and licenses are in `WiiU/third_party/coopnet` and `WiiU/third_party/libjuice`.
+The mod started from GORE / Hard-Mode! by the GORE Team: IncredibleHolc, Cooliokid956, Blocky.cmd, Birdekek, Saniky, Tilly, Isaac, Frijoles, ProfeJavix and I'mYourCat. I've heavily edited it into my own realism-focused version, so it doesn't really represent the original Hard-Mode anymore.
+
+Wii U builds include CoopNet (GNU AGPL v3) and libjuice (MPL 2.0); their source and licenses are in `WiiU/third_party/coopnet` and `WiiU/third_party/libjuice`.
 
 The Android signing key is in `fork/signing/` so builds can update each other. Anyone with access to it can sign an update; use a private key before distributing to strangers.
