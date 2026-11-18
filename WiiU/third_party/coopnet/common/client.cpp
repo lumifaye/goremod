@@ -49,9 +49,11 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
         mConnection->mSocket = -1;
         return false;
     }
+    WIIU_COOPNET_TRACE("coopnet: server resolved; preparing socket\n");
     mConnection->mAddress.sin_port = htons(aPort);
 
     SocketSetOptions(mConnection->mSocket);
+    WIIU_COOPNET_TRACE("coopnet: socket options set\n");
     errno = 0;
 
     WIIU_COOPNET_TRACE("coopnet: connecting\n");

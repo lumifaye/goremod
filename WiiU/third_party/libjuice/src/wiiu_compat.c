@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <nsysnet/_netdb.h>
 
 #undef getaddrinfo
 #undef freeaddrinfo
@@ -85,7 +86,9 @@ int juice_wiiu_getaddrinfo(const char *node, const char *service, const struct a
 	mutex_lock(&mutex);
 
 	int ret = EAI_NONAME;
-	struct hostent *he = gethostbyname(node);
+	// WUT gethostbyname additionally calls get_h_errno, absent in Cemu.
+	// The raw resolver return is all this code uses.
+	struct hostent *he = RPLWRAP(gethostbyname)(node);
 	if (he && he->h_addrtype == AF_INET && he->h_length == 4 && he->h_addr_list) {
 		struct addrinfo *first = NULL;
 		struct addrinfo *last = NULL;

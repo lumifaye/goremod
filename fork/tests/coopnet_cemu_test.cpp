@@ -27,7 +27,7 @@ extern "C" OSDynLoad_Error OSDynLoad_FindExport(OSDynLoad_Module, OSDynLoad_Expo
     return OS_DYNLOAD_OK;
 }
 extern "C" void OSDynLoad_Release(OSDynLoad_Module) { ++releaseCalls; }
-extern "C" struct hostent* __wrap_gethostbyname(const char*) {
+extern "C" struct hostent* __rplwrap_gethostbyname(const char*) {
     static char ip[] = { 1, 2, 3, 4 }, *list[] = { ip, nullptr }, *empty[] = { nullptr };
     static hostent entry = {};
     if (dnsMode == 0) return nullptr;

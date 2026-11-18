@@ -11,6 +11,9 @@
 #endif
 #include "socket.hpp"
 #include <cstring>
+#ifdef __WIIU__
+#include <nsysnet/_netdb.h>
+#endif
 
 #if defined(__APPLE__)
 // for _NSGetExecutablePath
@@ -25,7 +28,13 @@ bool GetAddrFromDomain(const std::string& domain, in_addr_t* address) {
         *address = numeric.s_addr;
         return true;
     }
+#ifdef __WIIU__
+    // WUT's gethostbyname wrapper also calls get_h_errno, which Cemu lacks.
+    // This caller only needs the returned hostent, not the resolver error code.
+    struct hostent* he = RPLWRAP(gethostbyname)(domain.c_str());
+#else
     struct hostent* he = gethostbyname(domain.c_str());
+#endif
     if (!he || he->h_addrtype != AF_INET || he->h_length != sizeof(in_addr) ||
         !he->h_addr_list || !he->h_addr_list[0]) { return false; }
     memcpy(address, he->h_addr_list[0], sizeof(*address));

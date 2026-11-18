@@ -7,5 +7,5 @@ c++ -std=c++17 -D__WIIU__ -ffunction-sections -fdata-sections \
   -I"$root/fork/tests/coopnet_cemu_mock" -I"$common" \
   -I"$root/WiiU/third_party/coopnet/lib/include" \
   "$root/fork/tests/coopnet_cemu_test.cpp" "$common/socket.cpp" "$common/utils.cpp" \
-  -Wl,--gc-sections -Wl,--wrap=gethostbyname -o "$tmp/test"
+  -Wl,--gc-sections -o "$tmp/test"
 "$tmp/test"
