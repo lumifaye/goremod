@@ -89,7 +89,8 @@ void SocketLimitBuffer(int aSocket, int64_t* amount) {
     }
 }
 
-uint64_t SocketGetInfoBits(int aSocket) {
+uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId) {
+    (void)fallbackId;
     DWORD bufferSize = 0;
     GetAdaptersInfo(NULL, &bufferSize);
     PIP_ADAPTER_INFO adapterInfo = (PIP_ADAPTER_INFO)malloc(bufferSize);
@@ -129,6 +130,7 @@ uint64_t SocketGetInfoBits(int aSocket) {
 #ifdef __WIIU__
 // Wii U: no list of network interfaces (net/if.h, ifaddrs.h); the console tells its own addresses.
 #include <nsysnet/netconfig.h>
+#include <coreinit/dynload.h>
 #else
 #include <net/if.h>
 #include <ifaddrs.h>
@@ -179,33 +181,49 @@ void SocketLimitBuffer(int aSocket, int64_t* amount) {
 }
 
 #ifdef __WIIU__
-uint64_t SocketGetInfoBits(int aSocket) {
-    // Wii U: the same number the other machines make from their network cards' hardware addresses,
-    // made from the console's two (wireless and wired).
+uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId) {
     (void)aSocket;
     uint64_t info = SOCKET_DEFAULT_INFO;
+    bool gotMac = false;
+    OSDynLoad_Module module = nullptr;
+    using Init = decltype(&netconf_init);
+    using Close = decltype(&netconf_close);
+    using Mac = decltype(&netconf_get_if_macaddr);
+    Init initFn = nullptr;
+    Close closeFn = nullptr;
+    Mac macFn = nullptr;
+    void *initAddress = nullptr, *closeAddress = nullptr, *macAddress = nullptr;
 
-    if (netconf_init() >= 0) {
-        const NetConfInterfaceType types[2] = { NET_CONF_INTERFACE_TYPE_WIFI, NET_CONF_INTERFACE_TYPE_ETHERNET };
-        for (int t = 0; t < 2; t++) {
-            NetConfMACAddr mac;
-            memset(&mac, 0, sizeof(mac));
-            if (netconf_get_if_macaddr(types[t], &mac) != 0) { continue; }
-
-            uint64_t value = 0;
-            for (int i = 0; i < 6; i++) {
-                value ^= ((uint64_t)mac.MACAddr[i]) << (8 * i);
+    if (OSDynLoad_Acquire("nsysnet.rpl", &module) == OS_DYNLOAD_OK) {
+        if (OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_FUNC, "netconf_init", &initAddress) == OS_DYNLOAD_OK &&
+            OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_FUNC, "netconf_close", &closeAddress) == OS_DYNLOAD_OK &&
+            OSDynLoad_FindExport(module, OS_DYNLOAD_EXPORT_FUNC, "netconf_get_if_macaddr", &macAddress) == OS_DYNLOAD_OK &&
+            initAddress && closeAddress && macAddress) {
+            initFn = reinterpret_cast<Init>(initAddress);
+            closeFn = reinterpret_cast<Close>(closeAddress);
+            macFn = reinterpret_cast<Mac>(macAddress);
+            if (initFn() >= 0) {
+                const NetConfInterfaceType types[2] = { NET_CONF_INTERFACE_TYPE_WIFI, NET_CONF_INTERFACE_TYPE_ETHERNET };
+                for (int t = 0; t < 2; t++) {
+                    NetConfMACAddr mac = {};
+                    if (macFn(types[t], &mac) != 0) { continue; }
+                    uint64_t value = 0;
+                    for (int i = 0; i < 6; i++) value |= ((uint64_t)mac.MACAddr[i]) << (8 * i);
+                    if (value) { info += value; gotMac = true; }
+                }
+                closeFn();
             }
-            info += value;
         }
-        netconf_close();
+        OSDynLoad_Release(module);
     }
-
-    info = SocketAddHash(info);
-    return info;
+    // Cemu does not implement these netconf exports. Use the already-persisted
+    // destination ID rather than giving every emulator instance the same ID.
+    if (!gotMac) info += fallbackId & 0x0000FFFFFFFFFFFFULL;
+    return SocketAddHash(info);
 }
 #else
-uint64_t SocketGetInfoBits(int aSocket) {
+uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId) {
+    (void)fallbackId;
     struct ifaddrs* ifaddr = NULL;
     struct ifaddrs* ifa = NULL;
     uint64_t info = SOCKET_DEFAULT_INFO;

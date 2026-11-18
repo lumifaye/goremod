@@ -46,5 +46,5 @@ int SocketInitialize(int aAf, int aType, int aProtocol);
 int SocketClose(int aSocket);
 void SocketSetOptions(int aSocket);
 void SocketLimitBuffer(int aSocket, int64_t* amount);
-uint64_t SocketGetInfoBits(int aSocket);
+uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId = 0);
 

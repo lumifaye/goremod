@@ -2,6 +2,12 @@
 #include "mpacket.hpp"
 #include "utils.hpp"
 #include "logging.hpp"
+#ifdef __WIIU__
+#include <coreinit/debug.h>
+#define WIIU_COOPNET_TRACE(...) OSReport(__VA_ARGS__)
+#else
+#define WIIU_COOPNET_TRACE(...) ((void)0)
+#endif
 
 Client* gClient = NULL;
 
@@ -16,6 +22,7 @@ Client::~Client() {
 
 bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_t aDestId)
 {
+    WIIU_COOPNET_TRACE("coopnet: Client::Begin start\n");
     mConnection = new Connection(0);
 
     // setup default stun server
@@ -26,18 +33,28 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
     mConnection->mSocket = SocketInitialize(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(mConnection->mSocket <= 0)
     {
+        WIIU_COOPNET_TRACE("coopnet: socket creation failed\n");
         LOG_ERROR("Socket failed");
         return false;
     }
 
+    WIIU_COOPNET_TRACE("coopnet: socket ready; resolving server\n");
+
     // type of socket created
     mConnection->mAddress.sin_family = AF_INET;
-    mConnection->mAddress.sin_addr.s_addr = GetAddrFromDomain(aHost);
+    if (!GetAddrFromDomain(aHost, &mConnection->mAddress.sin_addr.s_addr)) {
+        WIIU_COOPNET_TRACE("coopnet: server resolution failed\n");
+        LOG_ERROR("Could not resolve CoopNet host: %s", aHost.c_str());
+        SocketClose(mConnection->mSocket);
+        mConnection->mSocket = -1;
+        return false;
+    }
     mConnection->mAddress.sin_port = htons(aPort);
 
     SocketSetOptions(mConnection->mSocket);
     errno = 0;
 
+    WIIU_COOPNET_TRACE("coopnet: connecting\n");
     int rc = connect(mConnection->mSocket, (struct sockaddr*) &mConnection->mAddress, sizeof(struct sockaddr_in));
     if (rc < 0) {
         rc = errno;
@@ -71,14 +88,17 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
         }
     }
 
+    WIIU_COOPNET_TRACE("coopnet: initializing connection\n");
     mConnection->Begin(nullptr);
+    WIIU_COOPNET_TRACE("coopnet: sending client info\n");
 
     MPacketInfo({
         .destId = aDestId,
-        .infoBits = SocketGetInfoBits(mConnection->mSocket),
+        .infoBits = SocketGetInfoBits(mConnection->mSocket, aDestId),
         .hash = hashFile(),
     }, { aName }).Send(*mConnection);
 
+    WIIU_COOPNET_TRACE("coopnet: client info sent\n");
     return true;
 }
 

@@ -10,7 +10,7 @@ typedef struct {
 	uint16_t port;
 } StunTurnServer;
 
-in_addr_t GetAddrFromDomain(const std::string& domain);
+bool GetAddrFromDomain(const std::string& domain, in_addr_t* address);
 float clock_elapsed(void);
 
 std::string getExecutablePath();

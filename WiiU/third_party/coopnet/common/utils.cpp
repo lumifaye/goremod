@@ -10,20 +10,26 @@
 #include <filesystem>
 #endif
 #include "socket.hpp"
+#include <cstring>
 
 #if defined(__APPLE__)
 // for _NSGetExecutablePath
 #include <mach-o/dyld.h>
 #endif
 
-// Convert a domain name to an in_addr using gethostbyname
-in_addr_t GetAddrFromDomain(const std::string& domain) {
-    struct hostent* he = gethostbyname(domain.c_str());
-    if (he == nullptr) {
-        he = gethostbyname("127.0.0.1");
+// Resolve numeric addresses directly and fail safely if DNS has no IPv4 result.
+bool GetAddrFromDomain(const std::string& domain, in_addr_t* address) {
+    if (!address || domain.empty()) { return false; }
+    struct in_addr numeric;
+    if (inet_pton(AF_INET, domain.c_str(), &numeric) == 1) {
+        *address = numeric.s_addr;
+        return true;
     }
-    auto addr_list = reinterpret_cast<in_addr**>(he->h_addr_list);
-    return addr_list[0]->s_addr;
+    struct hostent* he = gethostbyname(domain.c_str());
+    if (!he || he->h_addrtype != AF_INET || he->h_length != sizeof(in_addr) ||
+        !he->h_addr_list || !he->h_addr_list[0]) { return false; }
+    memcpy(address, he->h_addr_list[0], sizeof(*address));
+    return true;
 }
 
 static void _clock_gettime(struct timespec* clock_time) {

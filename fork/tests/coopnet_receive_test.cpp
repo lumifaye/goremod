@@ -54,10 +54,8 @@ int main() {
     assert(write(fd[1], "abc", 3) == 3);
     pretend_empty = true;
     c.Receive();
-    assert(c.mActive && parsed == 1 && closed == 0);
-    pretend_empty = false;
-    c.Receive();
     assert(c.mActive && parsed == 3 && memcmp(received, "abc", 3) == 0 && closed == 0);
+    pretend_empty = false;
     close(fd[1]);
     c.Receive();
     assert(!c.mActive && closed == 1);
