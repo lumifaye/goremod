@@ -1,0 +1,551 @@
+#include <ctype.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#if defined(_WIN32)
+#include <windows.h>
+#include <wininet.h>
+#else
+#include <curl/curl.h>
+#endif
+
+#include "update_checker.h"
+#include "pc/djui/djui.h"
+#include "pc/platform.h"
+#include "pc/pc_main.h"
+#include "pc/network/version.h"
+#include "pc/loading.h"
+
+#if defined(__ANDROID__)
+#define VR_UPDATE_API_URL \
+    "https://api.github.com/repos/fulldivegames/sm64coopdx-VR-Standalone-Physics-based/releases?per_page=20"
+#else
+#define VR_UPDATE_API_URL \
+    "https://api.github.com/repos/fulldivegames/sm64coopdx-VR-Physics-based/releases/latest"
+#define VR_UPDATE_TAG_PREFIX ""
+#endif
+#define VR_UPDATE_RESPONSE_LIMIT (512 * 1024)
+#define VR_UPDATE_VERSION_MAX 32
+
+struct Version {
+    int maj;
+    int min;
+    int fix;
+};
+
+static char sVersionUpdateTextBuffer[256] = { 0 };
+static char sRemoteVersionStr[VR_UPDATE_VERSION_MAX] = { 0 };
+static enum VrUpdateStatus sVrUpdateStatus = VR_UPDATE_NOT_CHECKED;
+#if defined(_WIN32)
+static DWORD sVrUpdateExitTick = 0;
+#endif
+
+bool gUpdateMessage = false;
+
+enum VrUpdateStatus vr_update_get_status(void) {
+    return sVrUpdateStatus;
+}
+
+const char* vr_update_get_latest_version(void) {
+    return sRemoteVersionStr;
+}
+
+void show_update_popup(void) {
+    if (sVrUpdateStatus != VR_UPDATE_AVAILABLE ||
+        sVersionUpdateTextBuffer[0] == '\0') {
+        return;
+    }
+    djui_popup_create(sVersionUpdateTextBuffer, 3);
+}
+
+static bool string_to_version(const char* string, struct Version* version) {
+    if (string == NULL || version == NULL) {
+        return false;
+    }
+
+    const char* cursor = string;
+    if (*cursor == 'v' || *cursor == 'V') {
+        cursor++;
+    }
+    if (!isdigit((unsigned char)*cursor)) {
+        return false;
+    }
+
+    char* end = NULL;
+    long components[3] = { 0, 0, 0 };
+    for (u32 index = 0; index < 3; index++) {
+        components[index] = strtol(cursor, &end, 10);
+        if (end == cursor || components[index] < 0 ||
+            components[index] > INT_MAX) {
+            return false;
+        }
+        cursor = end;
+        if (index < 2 && *cursor == '.') {
+            cursor++;
+            if (!isdigit((unsigned char)*cursor)) {
+                return false;
+            }
+        } else {
+            break;
+        }
+    }
+
+    if (*cursor != '\0' && *cursor != '-' && *cursor != '+') {
+        return false;
+    }
+
+    version->maj = (int)components[0];
+    version->min = (int)components[1];
+    version->fix = (int)components[2];
+    return true;
+}
+
+static bool is_version_newer(
+    struct Version client,
+    struct Version remote
+) {
+    if (remote.maj != client.maj) {
+        return remote.maj > client.maj;
+    }
+    if (remote.min != client.min) {
+        return remote.min > client.min;
+    }
+    return remote.fix > client.fix;
+}
+
+static bool parse_remote_version(const char* data) {
+    static const char key[] = "\"tag_name\"";
+#if !defined(__ANDROID__)
+    const size_t prefixLength = strlen(VR_UPDATE_TAG_PREFIX);
+#endif
+    const char* cursor = data;
+    while (cursor != NULL && (cursor = strstr(cursor, key)) != NULL) {
+        const char* tag = strchr(cursor + sizeof(key) - 1, ':');
+        if (tag == NULL || (tag = strchr(tag + 1, '"')) == NULL) {
+            return false;
+        }
+        tag++;
+        const char* end = strchr(tag, '"');
+        if (end == NULL) {
+            return false;
+        }
+        cursor = end + 1;
+#if defined(__ANDROID__)
+        // v0.5.0 clients only recognize the historical android-v tag, while
+        // newer standalone releases also accept normal v tags. Preserve the
+        // leading v passed to string_to_version in either case.
+        if (strncmp(tag, "android-v", strlen("android-v")) == 0) {
+            tag += strlen("android-");
+        } else if (*tag != 'v' && *tag != 'V') {
+            continue;
+        }
+#else
+        if (strncmp(tag, VR_UPDATE_TAG_PREFIX, prefixLength) != 0) {
+            continue;
+        }
+        tag += prefixLength;
+#endif
+        const size_t length = (size_t)(end - tag);
+        if (length == 0 || length >= sizeof(sRemoteVersionStr)) {
+            continue;
+        }
+        memcpy(sRemoteVersionStr, tag, length);
+        sRemoteVersionStr[length] = '\0';
+
+        struct Version parsed = { 0 };
+        if (string_to_version(sRemoteVersionStr, &parsed)) {
+            return true;
+        }
+        sRemoteVersionStr[0] = '\0';
+    }
+    return false;
+}
+
+#if defined(_WIN32)
+static bool get_version_remote(void) {
+    bool success = false;
+    HINTERNET internet = NULL;
+    HINTERNET request = NULL;
+    char* response = NULL;
+    sRemoteVersionStr[0] = '\0';
+
+    internet = InternetOpenA(
+        "SM64-Co-Op-DX-VR/" SM64COOPDX_VR_CLIENT_VERSION,
+        INTERNET_OPEN_TYPE_PRECONFIG,
+        NULL,
+        NULL,
+        0
+    );
+    if (internet == NULL) {
+        goto cleanup;
+    }
+
+    DWORD timeoutMs = 3000;
+    InternetSetOptionA(
+        internet,
+        INTERNET_OPTION_CONNECT_TIMEOUT,
+        &timeoutMs,
+        sizeof(timeoutMs)
+    );
+    InternetSetOptionA(
+        internet,
+        INTERNET_OPTION_RECEIVE_TIMEOUT,
+        &timeoutMs,
+        sizeof(timeoutMs)
+    );
+
+    static const char headers[] =
+        "Accept: application/vnd.github+json\r\n"
+        "X-GitHub-Api-Version: 2026-03-10\r\n";
+    request = InternetOpenUrlA(
+        internet,
+        VR_UPDATE_API_URL,
+        headers,
+        (DWORD)-1L,
+        INTERNET_FLAG_RELOAD |
+            INTERNET_FLAG_NO_CACHE_WRITE |
+            INTERNET_FLAG_SECURE,
+        0
+    );
+    if (request == NULL) {
+        goto cleanup;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusSize = sizeof(statusCode);
+    if (!HttpQueryInfoA(
+            request,
+            HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+            &statusCode,
+            &statusSize,
+            NULL
+        ) || statusCode != HTTP_STATUS_OK) {
+        goto cleanup;
+    }
+
+    response = malloc(VR_UPDATE_RESPONSE_LIMIT);
+    if (response == NULL) {
+        goto cleanup;
+    }
+
+    size_t total = 0;
+    while (total < VR_UPDATE_RESPONSE_LIMIT - 1) {
+        const size_t remaining =
+            VR_UPDATE_RESPONSE_LIMIT - 1 - total;
+        const DWORD requestSize = (DWORD)(
+            remaining < 4096 ? remaining : 4096
+        );
+        DWORD bytesRead = 0;
+        if (!InternetReadFile(
+                request,
+                response + total,
+                requestSize,
+                &bytesRead
+            )) {
+            goto cleanup;
+        }
+        if (bytesRead == 0) {
+            break;
+        }
+        total += bytesRead;
+    }
+    response[total] = '\0';
+    success = parse_remote_version(response);
+
+cleanup:
+    free(response);
+    if (request != NULL) {
+        InternetCloseHandle(request);
+    }
+    if (internet != NULL) {
+        InternetCloseHandle(internet);
+    }
+    return success;
+}
+#else
+struct DownloadBuffer {
+    char* data;
+    size_t size;
+};
+
+static size_t write_callback(
+    char* contents,
+    size_t size,
+    size_t count,
+    void* userdata
+) {
+    const size_t received = size * count;
+    struct DownloadBuffer* buffer = userdata;
+    if (received > VR_UPDATE_RESPONSE_LIMIT - buffer->size - 1) {
+        return 0;
+    }
+
+    char* resized = realloc(
+        buffer->data,
+        buffer->size + received + 1
+    );
+    if (resized == NULL) {
+        return 0;
+    }
+    buffer->data = resized;
+    memcpy(buffer->data + buffer->size, contents, received);
+    buffer->size += received;
+    buffer->data[buffer->size] = '\0';
+    return received;
+}
+
+static bool get_version_remote(void) {
+    bool success = false;
+    struct DownloadBuffer response = { 0 };
+    struct curl_slist* headers = NULL;
+    sRemoteVersionStr[0] = '\0';
+
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        return false;
+    }
+    CURL* curl = curl_easy_init();
+    if (curl == NULL) {
+        curl_global_cleanup();
+        return false;
+    }
+
+    headers = curl_slist_append(
+        headers,
+        "Accept: application/vnd.github+json"
+    );
+    headers = curl_slist_append(
+        headers,
+        "X-GitHub-Api-Version: 2026-03-10"
+    );
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                     "SM64-Co-Op-DX-VR/" SM64COOPDX_VR_CLIENT_VERSION);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 3L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_URL, VR_UPDATE_API_URL);
+
+    if (curl_easy_perform(curl) == CURLE_OK &&
+        response.data != NULL) {
+        success = parse_remote_version(response.data);
+    }
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    free(response.data);
+    curl_global_cleanup();
+    return success;
+}
+#endif
+
+#if defined(_WIN32)
+bool vr_update_install_latest(void) {
+    if (sRemoteVersionStr[0] == '\0') return false;
+    const char* exeDir = sys_exe_path_dir();
+    const char* exePath = sys_exe_path_file();
+    if (exeDir == NULL || exeDir[0] == '\0' ||
+        exePath == NULL || exePath[0] == '\0') {
+        return false;
+    }
+
+    // The upstream coopdx_updater.exe is hard-coded to the flat-screen
+    // project. Generate a VR-specific updater so this path can only select
+    // the PC VR repository and its VR-named package.
+    char tempPath[SYS_MAX_PATH] = { 0 };
+    if (GetTempPathA(sizeof(tempPath), tempPath) == 0) {
+        return false;
+    }
+    const DWORD nonce = GetTickCount();
+    char scriptPath[SYS_MAX_PATH] = { 0 };
+    char zipPath[SYS_MAX_PATH] = { 0 };
+    char stagePath[SYS_MAX_PATH] = { 0 };
+    if (snprintf(scriptPath, sizeof(scriptPath),
+                 "%ssm64vr-update-%lu.ps1", tempPath,
+                 (unsigned long)nonce) < 0 ||
+        snprintf(zipPath, sizeof(zipPath),
+                 "%ssm64vr-update-%lu.zip", tempPath,
+                 (unsigned long)nonce) < 0 ||
+        snprintf(stagePath, sizeof(stagePath),
+                 "%ssm64vr-stage-%lu", tempPath,
+                 (unsigned long)nonce) < 0) {
+        return false;
+    }
+
+    char escapedExeDir[SYS_MAX_PATH * 2] = { 0 };
+    char escapedExePath[SYS_MAX_PATH * 2] = { 0 };
+    char escapedZipPath[SYS_MAX_PATH * 2] = { 0 };
+    char escapedStagePath[SYS_MAX_PATH * 2] = { 0 };
+    char escapedScriptPath[SYS_MAX_PATH * 2] = { 0 };
+    const char* sourcePaths[] = {
+        exeDir, exePath, zipPath, stagePath, scriptPath
+    };
+    char* escapedPaths[] = {
+        escapedExeDir, escapedExePath, escapedZipPath,
+        escapedStagePath, escapedScriptPath
+    };
+    const size_t escapedCaps[] = {
+        sizeof(escapedExeDir), sizeof(escapedExePath),
+        sizeof(escapedZipPath), sizeof(escapedStagePath),
+        sizeof(escapedScriptPath)
+    };
+    for (size_t pathIndex = 0;
+         pathIndex < sizeof(sourcePaths) / sizeof(sourcePaths[0]);
+         pathIndex++) {
+        size_t outputIndex = 0;
+        for (const char* input = sourcePaths[pathIndex]; *input != '\0'; input++) {
+            if (outputIndex + 2 >= escapedCaps[pathIndex]) {
+                return false;
+            }
+            escapedPaths[pathIndex][outputIndex++] = *input;
+            if (*input == '\'') {
+                escapedPaths[pathIndex][outputIndex++] = '\'';
+            }
+        }
+        escapedPaths[pathIndex][outputIndex] = '\0';
+    }
+
+    FILE* script = fopen(scriptPath, "wb");
+    if (script == NULL) {
+        return false;
+    }
+    const int scriptResult = fprintf(script,
+        "$ErrorActionPreference='Stop';\n"
+        "$ProgressPreference='SilentlyContinue';\n"
+        "[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12;\n"
+        "$api='https://api.github.com/repos/fulldivegames/sm64coopdx-VR-Physics-based/releases/latest';\n"
+        "$headers=@{Accept='application/vnd.github+json';'User-Agent'='SM64-Co-Op-DX-VR-Updater'};\n"
+        "$exeDir='%s'; $exePath='%s'; $zipPath='%s'; $stagePath='%s';\n"
+        "Start-Sleep -Seconds 2;\n"
+        "$release=Invoke-RestMethod -Headers $headers -Uri $api;\n"
+        "if ($null -eq $release -or $release.draft -or $release.prerelease) { throw 'No stable PC VR release is available.' };\n"
+        "$expectedAsset='SM64-Co-Op-DX-VR-Windows-' + $release.tag_name + '.zip';\n"
+        "$expectedHash=$null; $modelPath=Join-Path $exeDir 'speech/ggml-small-q5_1.bin';\n"
+        "$manifestAsset=@($release.assets | Where-Object { $_.name -eq ('SM64-Co-Op-DX-VR-Windows-' + $release.tag_name + '-update.json') }) | Select-Object -First 1;\n"
+        "if ($null -ne $manifestAsset) {\n"
+        "  $manifest=Invoke-RestMethod -Headers $headers -Uri $manifestAsset.browser_download_url;\n"
+        "  if ($manifest.schema -ne 1 -or $manifest.version -ne $release.tag_name -or $manifest.model_sha256 -notmatch '^[0-9a-fA-F]{64}$' -or $manifest.full_sha256 -notmatch '^[0-9a-fA-F]{64}$' -or $manifest.update_sha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Invalid PC VR update manifest.' };\n"
+        "  $expectedHash=$manifest.full_sha256;\n"
+        "  $smallName='SM64-Co-Op-DX-VR-Windows-' + $release.tag_name + '-update.zip';\n"
+        "  if (($release.assets | Where-Object { $_.name -eq $smallName }) -and (Test-Path -LiteralPath $modelPath -PathType Leaf)) {\n"
+        "    Write-Host 'Checking existing speech model...';\n"
+        "    if ((Get-FileHash -LiteralPath $modelPath -Algorithm SHA256).Hash -eq $manifest.model_sha256) { $expectedAsset=$smallName; $expectedHash=$manifest.update_sha256 };\n"
+        "  };\n"
+        "};\n"
+        "$asset=@($release.assets | Where-Object { $_.name -eq $expectedAsset }) | Select-Object -First 1;\n"
+        "if ($null -eq $asset) { throw ('PC VR asset not found: ' + $expectedAsset) };\n"
+        "Write-Host ('Downloading ' + $asset.name + ' (' + [Math]::Round($asset.size/1MB,1) + ' MiB)...');\n"
+        "$download=[Net.WebClient]::new();\n"
+        "try { $download.Headers['User-Agent']='SM64-Co-Op-DX-VR-Updater'; $download.DownloadFile($asset.browser_download_url,$zipPath) } finally { $download.Dispose() };\n"
+        "if (!(Test-Path -LiteralPath $zipPath -PathType Leaf)) { throw 'PC VR package download failed.' };\n"
+        "Write-Host 'Verifying download...';\n"
+        "if ((Get-Item -LiteralPath $zipPath).Length -ne $asset.size) { throw 'Incomplete PC VR download.' };\n"
+        "if (!$expectedHash -and $asset.digest -match '^sha256:([0-9a-fA-F]{64})$') { $expectedHash=$Matches[1] };\n"
+        "if ($expectedHash -and (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash -ne $expectedHash) { throw 'PC VR package checksum mismatch.' };\n"
+        "Write-Host 'Extracting update...';\n"
+        "Expand-Archive -LiteralPath $zipPath -DestinationPath $stagePath -Force;\n"
+        "$payload=Get-ChildItem -LiteralPath $stagePath -Directory | Select-Object -First 1;\n"
+        "if ($null -eq $payload) { $payload=Get-Item -LiteralPath $stagePath };\n"
+        "if (!(Test-Path -LiteralPath (Join-Path $payload.FullName 'SM64-Co-Op-DX-VR.exe') -PathType Leaf)) { throw 'Downloaded asset is not a PC VR package.' };\n"
+        "if ($null -ne $manifestAsset) {\n"
+        "  $checkedModel=Join-Path $payload.FullName 'speech/ggml-small-q5_1.bin';\n"
+        "  if ($expectedAsset -eq $smallName) { $checkedModel=$modelPath };\n"
+        "  if (!(Test-Path -LiteralPath $checkedModel -PathType Leaf) -or (Get-FileHash -LiteralPath $checkedModel -Algorithm SHA256).Hash -ne $manifest.model_sha256) { throw 'Required speech model failed verification; installation stopped.' };\n"
+        "};\n"
+        "Write-Host 'Installing current game files...';\n"
+        "Get-ChildItem -LiteralPath $payload.FullName -Force | Copy-Item -Destination $exeDir -Recurse -Force;\n"
+        "Remove-Item -LiteralPath (Join-Path $exeDir 'Co-op DX VR Updater.exe') -Force -ErrorAction SilentlyContinue;\n"
+        "Remove-Item -LiteralPath (Join-Path $exeDir 'coopdx_updater.exe') -Force -ErrorAction SilentlyContinue;\n"
+        "Start-Process -FilePath $exePath;\n"
+        "Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue;\n"
+        "Remove-Item -LiteralPath $stagePath -Recurse -Force -ErrorAction SilentlyContinue;\n"
+        "Remove-Item -LiteralPath '%s' -Force -ErrorAction SilentlyContinue;\n",
+        escapedExeDir, escapedExePath, escapedZipPath, escapedStagePath,
+        escapedScriptPath);
+    if (scriptResult < 0 || fclose(script) != 0) {
+        DeleteFileA(scriptPath);
+        return false;
+    }
+
+    STARTUPINFOA si = { 0 };
+    PROCESS_INFORMATION pi = { 0 };
+    si.cb = sizeof(si);
+    char command[SYS_MAX_PATH + 128] = { 0 };
+    if (snprintf(command, sizeof(command),
+                 "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%s\"",
+                 scriptPath) < 0 ||
+        !CreateProcessA(NULL, command, NULL, NULL, FALSE,
+                        CREATE_NEW_CONSOLE, NULL, exeDir, &si, &pi)) {
+        DeleteFileA(scriptPath);
+        printf("[VR] Could not launch VR updater (error %lu).\n",
+               (unsigned long)GetLastError());
+        return false;
+    }
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    sVrUpdateExitTick = GetTickCount() + 350;
+    return true;
+}
+
+bool vr_update_should_exit(void) {
+    return sVrUpdateExitTick != 0 &&
+           (LONG)(GetTickCount() - sVrUpdateExitTick) >= 0;
+}
+#else
+bool vr_update_install_latest(void) { return false; }
+bool vr_update_should_exit(void) { return false; }
+#endif
+
+void check_for_updates(void) {
+    LOADING_SCREEN_MUTEX(
+        loading_screen_set_segment_text("Checking For VR Updates")
+    );
+
+    gUpdateMessage = false;
+    sVersionUpdateTextBuffer[0] = '\0';
+    sVrUpdateStatus = VR_UPDATE_CHECKING;
+
+    if (!get_version_remote()) {
+        sVrUpdateStatus = VR_UPDATE_CHECK_FAILED;
+        printf("[VR] Could not check GitHub for updates.\n");
+        return;
+    }
+
+    struct Version client = { 0 };
+    struct Version remote = { 0 };
+    if (!string_to_version(get_vr_version(), &client) ||
+        !string_to_version(sRemoteVersionStr, &remote)) {
+        sVrUpdateStatus = VR_UPDATE_CHECK_FAILED;
+        printf("[VR] GitHub returned an invalid release version.\n");
+        return;
+    }
+
+    if (is_version_newer(client, remote)) {
+        sVrUpdateStatus = VR_UPDATE_AVAILABLE;
+        gUpdateMessage = true;
+        snprintf(
+            sVersionUpdateTextBuffer,
+            sizeof(sVersionUpdateTextBuffer),
+            "\\#ffffa0\\SM64 Co-Op DX VR update available!\n"
+            "\\#dcdcdc\\Latest: %s\nInstalled: %s",
+            sRemoteVersionStr,
+            get_vr_version()
+        );
+        printf(
+            "[VR] Update available: %s (installed: %s).\n",
+            sRemoteVersionStr,
+            get_vr_version()
+        );
+    } else {
+        sVrUpdateStatus = VR_UPDATE_UP_TO_DATE;
+        printf(
+            "[VR] SM64 Co-Op DX VR %s is up to date.\n",
+            get_vr_version()
+        );
+    }
+}

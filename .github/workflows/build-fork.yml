@@ -1,0 +1,607 @@
+# Builds Realism64, the game with this mod built in (see fork/README.md): seven builds, each from the source of
+# the game it is based on, changed by fork/apply.py. No ROM is involved; the game asks for it at first start.
+#
+# It runs
+#   - from the Actions tab ("Run workflow"), once this file is on the default branch, or
+#   - on a push whose commit message has "[build]" in it (all of them), or "[build pc]", "[build linux]",
+#     "[build macos]" (both Macs), "[build pcvr]", "[build android]", "[build quest]" (that one only). Any
+#     other push starts nothing.
+#
+# What got built becomes a release (the "Releases" page of the repository): "Realism64 build <number>", tag
+# "build-<number>". Releases stay. The same files are on the run's page under "Artifacts" for 14 days.
+#
+# The steps that build run through fork/ci.sh: when one fails, the lines that say why are on the run's page
+# as annotations.
+
+name: Build Realism64
+
+on:
+  workflow_dispatch:
+    inputs:
+      builds:
+        description: Which builds
+        type: choice
+        default: all
+        options: [all, pc, linux, macos, pcvr, android, quest]
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------------------------------------------
+  # Windows, flat screen: the official game
+  # ------------------------------------------------------------------------------------------------------
+  pc:
+    name: PC (Windows)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'pc')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build pc]')))
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # (the mod's files have to arrive byte for byte as they are in the repository)
+      - name: Keep line ends as they are
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      # (of the copies of other repositories only the one this build is made from: PC)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/VR/
+            !/Android/
+            !/WiiU/
+
+      - name: Install build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          update: true
+          install: >-
+            make
+            git
+            zip
+            unzip
+            python3
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-SDL2
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py pc game
+
+      - name: Build
+        run: bash fork/ci.sh "Build" make -C game -j$(nproc)
+
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out/Realism64
+          cd game/build/us_pc
+          cp -r dynos lang mods palettes discord_game_sdk.dll sm64coopdx.exe ../../../out/Realism64/
+          cd ../../../out
+          bash ../fork/ci-dlls.sh Realism64/sm64coopdx.exe Realism64
+          while IFS= read -r mod; do test -f "Realism64/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
+          # The mod that is the game is in the program, not in the mods folder. Started once (it stops at the
+          # ROM, which isn't here), the program has written its files out.
+          test ! -e Realism64/mods/Gore-Hardmode
+          mkdir -p starttest
+          (timeout 120 Realism64/sm64coopdx.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
+          tail -n 20 starttest.txt
+          grep -q "could not find valid vanilla us sm64 rom" starttest.txt
+          bash ../fork/ci-embedded.sh starttest ../game ..
+          rm -rf starttest starttest.txt || true
+          zip -q -r Realism64-Windows.zip Realism64
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-pc-windows
+          path: out/Realism64-Windows.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # Linux, flat screen: the official game (the way its own workflow builds it)
+  # ------------------------------------------------------------------------------------------------------
+  linux:
+    name: PC (Linux)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'linux')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build linux]')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      # (of the copies of other repositories only the one this build is made from: PC)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/VR/
+            !/Android/
+            !/WiiU/
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip patchelf
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py pc game
+
+      - name: Build
+        run: bash fork/ci.sh "Build" make -C game -j$(nproc)
+
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out/Realism64
+          cd game/build/us_pc
+          cp -r dynos lang mods palettes libdiscord_game_sdk.so sm64coopdx ../../../out/Realism64/
+          cd ../../../out
+          cp ../fork/README-linux.txt Realism64/README.txt
+          cp ../fork/icon/icon.png Realism64/icon.png
+          chmod +x Realism64/sm64coopdx
+          # As built, the program finds libdiscord_game_sdk.so only when it is started from inside its own
+          # folder. Now it looks next to itself, wherever it is started from.
+          patchelf --set-rpath '$ORIGIN' Realism64/sm64coopdx
+          here="$PWD"
+          (cd / && ldd "$here/Realism64/sm64coopdx") > "$RUNNER_TEMP/ldd.txt"
+          cat "$RUNNER_TEMP/ldd.txt"
+          if grep -q "not found" "$RUNNER_TEMP/ldd.txt"; then exit 1; fi
+          grep -q "Realism64/libdiscord_game_sdk.so" "$RUNNER_TEMP/ldd.txt"
+          while IFS= read -r mod; do test -f "Realism64/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
+          # It starts: as far as looking for the ROM, which isn't here.
+          mkdir -p "$RUNNER_TEMP/save"
+          (cd / && timeout 120 "$here/Realism64/sm64coopdx" --headless --hide-loading-screen --savepath "$RUNNER_TEMP/save") > "$RUNNER_TEMP/start.txt" 2>&1 || true
+          tail -n 20 "$RUNNER_TEMP/start.txt"
+          grep -q "could not find valid vanilla us sm64 rom" "$RUNNER_TEMP/start.txt"
+          # (and by then it has written out the mod that is compiled into it, which is in no mods folder)
+          test ! -e Realism64/mods/Gore-Hardmode
+          bash ../fork/ci-embedded.sh "$RUNNER_TEMP/save" ../game ..
+          echo "::notice title=Linux build::starts as far as asking for the ROM; from the system it needs: $(objdump -p Realism64/sm64coopdx | awk '/NEEDED/ { printf "%s ", $2 }')"
+          zip -q -r Realism64-Linux.zip Realism64
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-pc-linux
+          path: out/Realism64-Linux.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # macOS, flat screen: the official game, once for Apple's own processors and once for Intel's (the way
+  # its own workflow builds them: GLEW and SDL2 are compiled here, so that the app runs on older systems
+  # than the one that built it)
+  # ------------------------------------------------------------------------------------------------------
+  macos:
+    name: PC (macOS, ${{ matrix.name }})
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'macos')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build macos]')))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple silicon
+            runner: macos-26
+            arch: arm64
+            oldest: '11'
+            prefix: /opt/homebrew
+            file: Realism64-macOS-AppleSilicon.zip
+            artifact: realism64-pc-macos-arm
+          - name: Intel
+            runner: macos-15-intel
+            arch: x86_64
+            oldest: '10.15'
+            prefix: /usr/local
+            file: Realism64-macOS-Intel.zip
+            artifact: realism64-pc-macos-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PKG_CONFIG_PATH: ${{ matrix.prefix }}/lib/pkgconfig
+    steps:
+      # (of the copies of other repositories only the one this build is made from: PC)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/VR/
+            !/Android/
+            !/WiiU/
+
+      # (the game's Makefile wants GNU make and cp, the assembler of mingw-w64, and a "cpp-<number>" of gcc)
+      - name: Install build tools
+        run: |
+          brew install make mingw-w64 pkg-config coreutils
+          ls "$(brew --prefix)"/bin/cpp-[0-9]* > /dev/null 2>&1 || brew install gcc
+          ls "$(brew --prefix)"/bin/cpp-[0-9]*
+
+      - name: Compile GLEW
+        run: |
+          # (not in the checkout: everything in it that isn't the game's source is taken for part of the mod)
+          cd "$RUNNER_TEMP"
+          export MACOSX_DEPLOYMENT_TARGET=${{ matrix.oldest }}
+          curl -f -L -o glew.tar.gz https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.tgz
+          tar -xzf glew.tar.gz
+          cd glew-2.2.0
+          make SYSTEM=darwin CC="clang -arch ${{ matrix.arch }} -mmacosx-version-min=${{ matrix.oldest }}" GLEW_PREFIX=${{ matrix.prefix }} GLEW_DEST=${{ matrix.prefix }}
+          make install SYSTEM=darwin GLEW_PREFIX=${{ matrix.prefix }} GLEW_DEST=${{ matrix.prefix }}
+
+      - name: Compile SDL2
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -f -L -o SDL2.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
+          tar -xzf SDL2.tar.gz
+          cd SDL2-2.30.9
+          ./configure --prefix=${{ matrix.prefix }} CC="clang -arch ${{ matrix.arch }} -mmacosx-version-min=${{ matrix.oldest }}"
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py pc game
+
+      - name: Build
+        run: bash fork/ci.sh "Build" gmake -C game OSX_BUILD=1 -j$(sysctl -n hw.ncpu)
+
+      # The app is signed by nobody ("ad hoc"): enough for it to run, and macOS asks before the first start.
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out
+          mv game/build/us_pc/sm64coopdx.app out/Realism64.app
+          cd out
+          app=Realism64.app
+          plutil -lint $app/Contents/Info.plist
+          plutil -p $app/Contents/Info.plist
+          test "$(plutil -extract NSMicrophoneUsageDescription raw $app/Contents/Info.plist | wc -c)" -gt 10
+          while IFS= read -r mod; do test -f "$app/Contents/Resources/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
+          # Everything the program asks for is in the app or part of macOS, and it is for this processor.
+          otool -L $app/Contents/MacOS/sm64coopdx | tee "$RUNNER_TEMP/libs.txt"
+          if tail -n +2 "$RUNNER_TEMP/libs.txt" | grep -v -E '^[[:space:]]*(@executable_path|@rpath|@loader_path|/usr/lib/|/System/)'; then
+            echo "the program asks for a library that is not in the app"
+            exit 1
+          fi
+          lipo -archs $app/Contents/MacOS/sm64coopdx | grep -q -x "${{ matrix.arch }}"
+          codesign --force --deep --sign - $app
+          codesign --verify --deep --strict $app
+          # It starts: as far as looking for the ROM, which isn't here.
+          here="$PWD"
+          mkdir -p "$RUNNER_TEMP/save"
+          (cd / && gtimeout 120 "$here/$app/Contents/MacOS/sm64coopdx" --headless --hide-loading-screen --savepath "$RUNNER_TEMP/save") > "$RUNNER_TEMP/start.txt" 2>&1 || true
+          tail -n 20 "$RUNNER_TEMP/start.txt"
+          grep -q "could not find valid vanilla us sm64 rom" "$RUNNER_TEMP/start.txt"
+          # (and by then it has written out the mod that is compiled into it, which is in no mods folder)
+          test ! -e "$app/Contents/Resources/mods/Gore-Hardmode"
+          bash ../fork/ci-embedded.sh "$RUNNER_TEMP/save" ../game ..
+          codesign --verify --deep --strict $app
+          echo "::notice title=macOS build (${{ matrix.name }})::starts as far as asking for the ROM; it asks for: $(tail -n +2 "$RUNNER_TEMP/libs.txt" | awk '{ printf "%s ", $1 }')"
+          ditto -c -k --keepParent $app "${{ matrix.file }}"
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/${{ matrix.file }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # Windows, PC VR (OpenXR): the VR fork. This program also plays on a flat screen.
+  # ------------------------------------------------------------------------------------------------------
+  pcvr:
+    name: PC VR (Windows)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'pcvr')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build pcvr]')))
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Keep line ends as they are
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      # (of the copies of other repositories only the one this build is made from: VR)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/Android/
+            !/WiiU/
+
+      - name: Install build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw64
+          update: true
+          install: >-
+            make
+            git
+            zip
+            unzip
+            python3
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-openxr-sdk
+            mingw-w64-x86_64-SDL2
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py vr game
+
+      - name: Build
+        run: bash fork/ci.sh "Build" make -C game -j$(nproc)
+
+      # The layout of the VR fork's own package (its tools/package-vr-windows.ps1), without the "speech"
+      # folder: that is the offline dictation for the chat box, a 180 MB download and a build of its own.
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          stage=out/Realism64-VR
+          mkdir -p $stage/licenses
+          cd game
+          cp build/us_pc/sm64coopdx.exe ../$stage/SM64-Co-Op-DX-VR.exe
+          cp build/us_pc/discord_game_sdk.dll build/us_pc/normal_maps.bin ../$stage/
+          cp -r build/us_pc/dynos build/us_pc/lang build/us_pc/mods build/us_pc/palettes build/us_pc/sonic_shoes ../$stage/
+          # The OpenXR loader is asked for when VR starts, not when the program does, so it is named here. It
+          # brings the compiler's runtime along; all with their licences.
+          bash ../fork/ci-dlls.sh ../$stage/SM64-Co-Op-DX-VR.exe ../$stage libopenxr_loader.dll
+          test -f ../$stage/libopenxr_loader.dll
+          cp docs/PC-VR-PLAYER-GUIDE.txt ../$stage/README.txt
+          cp release_notes.txt tools/Launch-VR-Diagnostics.cmd ../$stage/
+          cp docs/VR-SPEEDRUN.txt docs/PROPELLER-MUSHROOM.txt docs/PHYSICAL-JUMPING.txt docs/PHYSICAL-SWIMMING.txt docs/POWER-UP-SPAWN-WEIGHTS.txt ../$stage/
+          cd ../out
+          while IFS= read -r mod; do test -f "Realism64-VR/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
+          # The mod that is the game is in the program, not in the mods folder. Started once, the program
+          # has written its files out before it looks for a headset or the ROM (whatever it does after).
+          test ! -e Realism64-VR/mods/Gore-Hardmode
+          mkdir -p starttest
+          (timeout 120 Realism64-VR/SM64-Co-Op-DX-VR.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
+          tail -n 20 starttest.txt
+          grep -q "could not find valid vanilla us sm64 rom" starttest.txt
+          bash ../fork/ci-embedded.sh starttest ../game ..
+          rm -rf starttest starttest.txt || true
+          zip -q -r Realism64-VR-Windows.zip Realism64-VR
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-pcvr-windows
+          path: out/Realism64-VR-Windows.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # Android phones and tablets: the Android port
+  # ------------------------------------------------------------------------------------------------------
+  android:
+    name: Android (APK)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'android')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build android]')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      # (of the copies of other repositories only the one this build is made from: Android)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/VR/
+            !/WiiU/
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          # (the app's build would fetch this itself, and has failed doing so)
+          bash fork/ci.sh "Install the NDK" "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py android game
+
+      # (the app is built from files that the PC build of the game makes, so that comes first)
+      - name: Build the game for this machine
+        run: bash fork/ci.sh "Build the game for this machine" make -C game -j$(nproc) TOUCH_CONTROLS=1
+
+      - name: Build the app
+        working-directory: game
+        run: |
+          chmod +x platform/gradlew
+          bash "$GITHUB_WORKSPACE/fork/ci.sh" "Build the app" ./platform/gradlew --no-daemon assembleRelease
+
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out
+          ls -l game/platform/app/build/outputs/apk/release/
+          cp game/platform/app/build/outputs/apk/release/app-release.apk out/Realism64-Android.apk
+          unzip -l out/Realism64-Android.apk > "$RUNNER_TEMP/apk.txt"
+          while IFS= read -r mod; do grep -q -F "assets/mods/$mod/built-in.txt" "$RUNNER_TEMP/apk.txt"; done < game/fork-built-in-mods.txt
+          # The mod that is the game is in the program (one of the app's libraries), not among its files.
+          # (The app can't be started here; the name of the mod's last file is looked for in the library.)
+          if grep -q -F "assets/mods/Gore-Hardmode/" "$RUNNER_TEMP/apk.txt"; then exit 1; fi
+          rm -rf "$RUNNER_TEMP/apk" && mkdir -p "$RUNNER_TEMP/apk"
+          unzip -q -o out/Realism64-Android.apk 'lib/arm64-v8a/*' -d "$RUNNER_TEMP/apk"
+          ls -l "$RUNNER_TEMP/apk/lib/arm64-v8a"
+          grep -l -a -F "Gore-Hardmode/built-in.txt" "$RUNNER_TEMP"/apk/lib/arm64-v8a/*.so
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-android
+          path: out/Realism64-Android.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # Quest (standalone): the VR fork's Android project
+  # ------------------------------------------------------------------------------------------------------
+  quest:
+    name: Quest (APK)
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'quest')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build quest]')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      # (of the copies of other repositories only the one this build is made from: VR)
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/Android/
+            !/WiiU/
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py vr game
+
+      # The app's build takes the files a PC build of the game generates (sounds, text, textures, level
+      # headers) from that build's folder. Building the game for this machine makes them all; the parts of
+      # it that don't compile here don't matter, the app compiles its own.
+      - name: Make the generated files
+        run: |
+          make -C game -k -j$(nproc) > "$RUNNER_TEMP/host-build.log" 2>&1 || true
+          bash fork/ci.sh "Make the generated files" bash -e <<'STEP'
+          cd game/build/us_pc
+          for file in assets/mario_anim_data.c assets/demo_data.c include/level_headers.h sound/sound_data.ctl.inc.c sound/sound_data.tbl.inc.c sound/sequences.bin.inc.c sound/bank_sets.inc.c text/us/define_text.inc.c; do
+            if [ ! -s "$file" ]; then
+              echo "not made: build/us_pc/$file"
+              grep -n -i -E "error|No rule|not found" "$RUNNER_TEMP/host-build.log" | head -30
+              tail -n 15 "$RUNNER_TEMP/host-build.log"
+              exit 1
+            fi
+          done
+          echo "generated: $(find . -name '*.inc.c' | wc -l) .inc.c files"
+          STEP
+
+      - name: Build the app
+        working-directory: game/platform/android
+        run: |
+          chmod +x gradlew
+          bash "$GITHUB_WORKSPACE/fork/ci.sh" "Build the app" ./gradlew --no-daemon assembleDebug -Psm64Target=quest "-Psm64GeneratedRoot=$GITHUB_WORKSPACE/game/build/us_pc"
+
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out
+          ls -l game/platform/android/app/build/outputs/apk/debug/
+          cp game/platform/android/app/build/outputs/apk/debug/app-debug.apk out/Realism64-VR-Quest.apk
+          unzip -l out/Realism64-VR-Quest.apk > "$RUNNER_TEMP/apk.txt"
+          while IFS= read -r mod; do grep -q -F "assets/mods/$mod/built-in.txt" "$RUNNER_TEMP/apk.txt"; done < game/fork-built-in-mods.txt
+          # The mod that is the game is in the program (one of the app's libraries), not among its files.
+          # (The app can't be started here; the name of the mod's last file is looked for in the library.)
+          if grep -q -F "assets/mods/Gore-Hardmode/" "$RUNNER_TEMP/apk.txt"; then exit 1; fi
+          rm -rf "$RUNNER_TEMP/apk" && mkdir -p "$RUNNER_TEMP/apk"
+          unzip -q -o out/Realism64-VR-Quest.apk 'lib/arm64-v8a/*' -d "$RUNNER_TEMP/apk"
+          ls -l "$RUNNER_TEMP/apk/lib/arm64-v8a"
+          grep -l -a -F "Gore-Hardmode/built-in.txt" "$RUNNER_TEMP"/apk/lib/arm64-v8a/*.so
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: realism64-quest
+          path: out/Realism64-VR-Quest.apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  # ------------------------------------------------------------------------------------------------------
+  # A release with what was built (fork/ci-release.sh). Also when some builds were left out or failed: the
+  # ones that did get built are released.
+  # ------------------------------------------------------------------------------------------------------
+  release:
+    name: Release
+    needs: [pc, linux, macos, pcvr, android, quest]
+    if: >-
+      always() && !cancelled() &&
+      (needs.pc.result == 'success' || needs.linux.result == 'success' || needs.macos.result != 'skipped' ||
+       needs.pcvr.result == 'success' || needs.android.result == 'success' || needs.quest.result == 'success')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # (none of the copies of other repositories: the release needs fork/ only)
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/VR/
+            !/Android/
+            !/WiiU/
+
+      - name: Get what was built
+        uses: actions/download-artifact@v4
+        with:
+          pattern: realism64-*
+          path: built
+          merge-multiple: true
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l built
+          bash fork/ci.sh "Release" bash fork/ci-release.sh built

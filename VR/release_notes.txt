@@ -1,0 +1,89 @@
+## v0.9.25 — Cannon Aiming Hotfix
+
+- Corrected vertical cannon stick aiming in VR: push up to aim up and down to aim down. Flat-screen controls are unchanged.
+- Corrected headset cannon pitch calculation while preserving free head movement, the native aiming limits and firing controls.
+- Applies to PC VR, standalone Quest and Steam Frame. Steam Frame remains an Untested Alpha; hardware compatibility is not guaranteed.
+
+## v0.9.22 — Color and Display Controls Hotfix
+
+- Restored the neutral original-game color baseline: brightness 100%, contrast 100%, and no color filter on first update. This one-time migration preserves later player adjustments.
+- Fixed VR brightness and contrast controls so they apply directly to world rendering; moved both sliders to **VR > Display > Effects**.
+- Added an ARM64 Steam Frame APK as a separate asset. It is labeled **Untested Alpha** and is the same build as the Quest APK; Steam Frame hardware compatibility has not been verified.
+
+## v0.9.21 — Physical Gestures and New Power-Ups
+
+- Added Speed Running Mode (Vanilla Game), optional Vanilla Movement (Restrictive Jumps), and Disable Punch Sound for physical punches only; saved preferences and jump/jump-kick sounds are preserved.
+
+- Added Propeller Mushroom: a 60-second power-up with an airborne burst, slow glide, crouch-controlled spinning descent, stomp rebounds, and a customizable propeller helmet.
+- Added Power Star: 30 seconds of enemy-contact invincibility, 1.5x running speed and jump height, rainbow shimmer, torso sparkles, and dedicated music with a four-second expiry fade. Its bouncing pickup floats on water surfaces.
+- Added physical jumping and swimming. Jump with either/both fists, sustain height by holding a fist up, and use gestures for jump chains, wall kicks and Propeller bursts. Swimming supports alternating strokes and overhead upward pulls.
+- On the first 0.9.2 launch, physical jumping, swimming, punching, grabbing, climbing, swing release and motion dives are enabled for everyone. Physical crouching is unchanged. You can disable these actions again; later launches retain your choices.
+- Added optional trigger-based jumping, adjustable physical crouch depth, and stronger climb-release jumps for hard swings.
+- Added relative power-up spawn weights, grouped Power-Ups / Specials / Gestures, and optional 60-second timers for Big Hands and Power Star. Both Specials have half the ordinary spawn weight at equal slider settings.
+- Added cosmetic power-up helmets and cap-state matching when grabbing your hat; updated the in-game tutorial for current controls and power-ups.
+
+Fixes and refinements
+- Improved PC physical jump recognition using tracked hand travel, and restored the jump-kick voice without re-enabling incidental airborne punch sounds.
+- Hardened native and menu text against inherited fog, texture and alpha state; improved long-text handling and reduced redundant word-measurement work.
+- Smoothed body tracking and corrected carried/thrown camera anchoring. Physical wall kicks retain full jump height while the triggering fist stays raised.
+- Improved swimming, surface shell riding, crouch/head-height handling, and gesture separation to reduce accidental punches and dives.
+- Corrected power-up music selection, replacement, held-cap size, and Propeller activation after small jumps, water exits and surface contacts.
+- Improved PC shader compatibility, OpenGL backend selection, and updater transfer handling. Existing saves, mods, palettes and other options are retained.
+
+PC: extract the complete ZIP, including speech and music assets. No ROM is supplied. PC speech under Wine/Proton and untested GPU/runtime combinations are not certified.
+
+## v0.9 — Visuals, Speedrunning and VR Improvements
+
+- Added Cell Shaded and expanded grayscale Super Mario Land filters, plus stationary crossed tree billboards enabled by default.
+- Fixed Character Select's floating theater presentation and improved menu text and modded health-meter hiding, alignment and scaling.
+- Added VR > Speedrunning: named splits, timer placement/size/color, progressive split reveal, controller start/split binding, and portable setup/LiveSplit split-file imports. Long names now fit the HUD name column instead of being truncated after 18 characters.
+- Improved Big Hands surface climbing, hand contacts, independent attachments, and extended grabbing/punching. Added headset interaction with treasure chests.
+- Added alternate special power-up music, preserving Sonic Shoes and original cap themes, and corrected replacement of the previous special power-up when collecting a new one.
+- Improved cap-grab behavior and added a missing-cap indicator on the life icon.
+- Corrected camera-turn lighting state and made script-error notices expire normally.
+- PC keyboard dictation now uses bundled offline Whisper. Press Mic again to finish and transcribe, or close the keyboard to cancel. CPU processing is faster with the same model; timing varies by hardware and VR load. Quest retains its Android recognizer with the same finish/cancel controls.
+- Updated the VR tutorial and player documentation. Retained large-map rendering optimizations, optional normal maps and the VR-specific updaters.
+
+PC: extract the entire ZIP, including the speech folder. No ROM is supplied; an existing user-provided ROM in the game's saved-data folder can be reused. LiveSplit plug-ins are not supported on Quest; imports use split names and times. PC speech under Wine/Proton has not been verified.
+
+## v0.8.9 — Large-Map Performance Update
+
+- Major shared PC VR/Quest rendering optimization: batch vertex uploads while preserving draw order, textures, and render state. Dramatically improved the tested Sonic Adventure DX map on Quest; benefits apply to other maps using the same rendering path and vary by workload.
+- Added the first public Big Hands power-up to the special spawn pool, with extended hand-based grabbing, punching, and surface climbing. Increased reach by 1.5x and retained independent hand attachments.
+- Tightened nearby-surface grab detection. The first-person body stays hidden after a grab until Mario lands.
+- Fixed stale special-move audio handles during session shutdown, addressing a stop-hosting crash.
+- Preserved the VR-specific updater and existing controller bindings, normal maps, and filters.
+
+## v0.8.4 — SteamVR and Controller Binding Fixes
+
+- Fixed the physical-climb distance cap that prevented reaching the top of tall poles in Bowser in the Sky.
+- Added reliable SteamVR/OpenXR runtime handoff behavior, including ALVR compatibility through SteamVR, without forcing a particular system runtime.
+- PC and Quest now use their matching GitHub release feeds, so PC VR updates resolve to the PC VR repository while Quest updates remain on the standalone repository.
+- Added controller-binding capture that waits for the next input, supports remapping, and keeps the right-primary menu A action independent from the gameplay Jump binding.
+- Added optional texture-matched normal maps with configurable strength and gloss controls. Normal maps are off by default; PC VR ships with 300% strength and 170% gloss.
+- Stabilized PC first-person camera height/recenter calibration and thumbstick-turn lighting state while keeping Quest tracking behavior unchanged.
+- Kept Sonic Shoes audio and power-up behavior synchronized across the PC VR and Quest builds.
+
+## v0.8.3 — Quest First-Run and Updater Fix
+
+- ROM selection now appears first on a fresh install, before microphone and storage permissions.
+- Importing a valid ROM launches the game automatically instead of leaving the player at the launcher.
+- Kept the selectable main-menu updater button and latest Quest APK lookup; bumped the package to v0.8.3.
+## v0.8.2 — Standalone Updater Hotfix
+
+- Restored the selectable Quest title-screen update button at the top of the main menu.
+- Kept latest standalone-release lookup, APK installation, permission guidance, and automatic relaunch.
+- Kept the standalone Release Notes page synchronized with this release.
+
+## v0.8.0 — Sonic Shoes Update
+
+- Added Sonic Shoes with timed activation, music, model swap, sparkle effects, configurable 0-300 speed, dive scaling, and high-speed water running.
+- Added Sonic Shoes to the spawn menu and balanced power-up box pools.
+- Added WiddlePets menu integration in Server Settings.
+- Hammers now knock Bully-type enemies back; explosions apply 1.5x knockback.
+- Added some conservative large-map optimizations for ROMhacks without reducing visual quality.
+
+## Previous Release Notes - v0.7.9
+
+- Added voice chat, PC microphone selection, Quest microphone support, volume controls, player muting, and speaking indicators.
+- Added keyboard voice dictation, Virtual Boy and Game Boy filters, and broader mod compatibility fixes.
