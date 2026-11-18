@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -eu
 program="$1"
 folder="$2"

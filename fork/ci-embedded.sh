@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -eu
 save="$1"
 game="$2"
@@ -15,7 +14,6 @@ test -s "$there/built-in.txt"
 count=0
 for file in "$repo"/actors/*.bin "$repo"/sound/*.ogg "$repo"/sound/*.m64 "$repo"/levels/*.lvl "$repo"/textures/*.tex; do
     [ -f "$file" ] || continue
-    # (cksum and not cmp: the Windows builds' shell comes without cmp)
     [ "$(cksum < "$file")" = "$(cksum < "$there/${file#"$repo"/}")" ] || { echo "not the same: ${file#"$repo"/}"; exit 1; }
     count=$((count + 1))
 done

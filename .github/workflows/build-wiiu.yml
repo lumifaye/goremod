@@ -1,20 +1,3 @@
-# Builds the Wii U version (the folder WiiU, see fork/README.md "The Wii U folder") with the real Wii U
-# compiler: devkitPPC and wut, from the devkitPro container. Twice:
-#
-#   - "Realism64":   the Wii U port with this project's changes (fork/apply.py, the same set as on the PC:
-#                    the gore mod built in, the other mods, the own name on CoopNet), and
-#   - "SM64 CoopDX": the Wii U port as it is in the folder WiiU, nothing of this project in it.
-#
-# It runs
-#   - from the Actions tab ("Run workflow"), once this file is on the default branch, or
-#   - on a push whose commit message has "[wiiu]" in it. Any other push starts nothing.
-#
-# What it makes becomes a pre-release "wiiu-<number of the run>" (fork/ci-release-wiiu.sh): one zip per
-# build, to unpack onto the SD card of a Wii U with Aroma. The .wuhb, the .rpx and the build log are also on
-# the run's page under "Artifacts". The list of compiler errors is put on the commit as checks
-# ("Wii U (...): errors", "... last lines", "... files"), through fork/ci_report.py.
-#
-# No ROM is involved. The player puts baserom.us.z64 on the SD card (see fork/README.md).
 
 name: Build Wii U
 
@@ -57,7 +40,6 @@ jobs:
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends git ca-certificates build-essential python3 rsync bsdextrautils zlib1g-dev pkg-config zip
 
-      # (the mod is the top of the repository; the three other copies of the game are not needed)
       - uses: actions/checkout@v4
         with:
           sparse-checkout-cone-mode: false
@@ -142,7 +124,6 @@ jobs:
           python3 fork/ci_report.py "Wii U ($TITLE): files" "$OUT/out.txt"
           exit "$status"
 
-      # The zip is the SD card's folders: unpack it onto the card and everything is where it belongs.
       - name: Pack for the SD card
         run: |
           OUT="$GITHUB_WORKSPACE/ci-out"

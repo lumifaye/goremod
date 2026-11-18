@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Puts a text file on a commit's page as a "check", where it can be read without downloading a log:
 
     python3 fork/ci_report.py <name> <file> [<file>...]
@@ -51,7 +50,7 @@ def main():
         title = name if len(parts) == 1 else '%s %d/%d' % (name, number, len(parts))
         try:
             post(title, part)
-        except Exception as error:  # the report must not break the build
+        except Exception as error:
             print('ci_report: %s: %s' % (title, error))
 
 

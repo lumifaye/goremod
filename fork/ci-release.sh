@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -eu
 folder="$1"
 tag="build-$GITHUB_RUN_NUMBER"
@@ -28,7 +27,7 @@ while IFS='|' read -r file short use; do
 done <<< "$all"
 
 if [ ${#files[@]} -eq 0 ]; then
-    echo "::error title=Release::nothing was built, there is nothing to release"
+    echo "::error title=Release::nothing was built, so there is nothing to release"
     exit 1
 fi
 
@@ -40,21 +39,21 @@ if [ -n "$missing" ]; then
 fi
 
 {
-    echo "The game with GORE / Hard-Mode built in. Built automatically from commit [\`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) of \`$GITHUB_REF_NAME\` ([the run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
+    echo "SM64 Coop DX with GORE / Hard-Mode built in. This build is from commit [\`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) of \`$GITHUB_REF_NAME\` ([the run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
     echo
     echo "| File | For |"
     echo "|---|---|"
     printf '%s' "$table"
     echo
     if [ -n "$missing" ]; then
-        echo "Not in this build: $missing."
+        echo "Missing from this build: $missing."
         echo
     fi
     if printf '%s' "$have" | grep -q "Mac"; then
-        echo "**On a Mac:** the app is not signed by a developer known to Apple, so macOS won't open it the first time. Unpack the zip, try to open \`Realism64.app\` once, then allow it in System Settings > Privacy & Security (\"Open Anyway\"); on older systems right-click the app and choose Open. Or, in Terminal: \`xattr -dr com.apple.quarantine Realism64.app\`."
+        echo "**On Mac:** the app isn't signed by an Apple-recognized developer, so macOS may block it at first. Unzip it, try to open \`Realism64.app\` once, then allow it in System Settings > Privacy & Security (\"Open Anyway\"); on older systems right-click the app and choose Open. Or, in Terminal: \`xattr -dr com.apple.quarantine Realism64.app\`."
         echo
     fi
-    echo "Each of them asks for your own Super Mario 64 ROM (US version) when it first starts; none is included."
+    echo "You need your own Super Mario 64 US ROM. The game will ask for it the first time you start it; no ROM is included."
 } > "$notes"
 
 if gh release view "$tag" > /dev/null 2>&1; then

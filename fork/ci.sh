@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -u
 name="$1"
 shift
@@ -6,7 +5,6 @@ log="${RUNNER_TEMP:-/tmp}/ci-$(printf '%s' "$name" | tr -c 'A-Za-z0-9' '-').log"
 
 "$@" > >(tee "$log") 2>&1
 status=$?
-# (tee is still writing its last lines when the command has ended)
 sleep 1
 [ "$status" -eq 0 ] && exit 0
 

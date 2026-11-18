@@ -299,7 +299,6 @@ end
 
 apply_engine_values()
 
--- Pull the host's rules out of the sync table once per frame (cheap, and it keeps every other file down to a plain table read).
 local sFirstRefresh = true
 local function refresh_options()
     local changed = sFirstRefresh

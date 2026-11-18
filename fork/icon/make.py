@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Makes every icon file of the fork from the picture `Untitled.png` in the top folder of this repository.
 
     python3 fork/icon/make.py          (needs Pillow: pip install pillow)

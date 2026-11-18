@@ -1,17 +1,3 @@
-# Builds Realism64, the game with this mod built in (see fork/README.md): seven builds, each from the source of
-# the game it is based on, changed by fork/apply.py. No ROM is involved; the game asks for it at first start.
-#
-# It runs
-#   - from the Actions tab ("Run workflow"), once this file is on the default branch, or
-#   - on a push whose commit message has "[build]" in it (all of them), or "[build pc]", "[build linux]",
-#     "[build macos]" (both Macs), "[build pcvr]", "[build android]", "[build quest]" (that one only). Any
-#     other push starts nothing.
-#
-# What got built becomes a release (the "Releases" page of the repository): "Realism64 build <number>", tag
-# "build-<number>". Releases stay. The same files are on the run's page under "Artifacts" for 14 days.
-#
-# The steps that build run through fork/ci.sh: when one fails, the lines that say why are on the run's page
-# as annotations.
 
 name: Build Realism64
 
@@ -29,9 +15,6 @@ permissions:
   contents: read
 
 jobs:
-  # ------------------------------------------------------------------------------------------------------
-  # Windows, flat screen: the official game
-  # ------------------------------------------------------------------------------------------------------
   pc:
     name: PC (Windows)
     if: >-
@@ -43,14 +26,12 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      # (the mod's files have to arrive byte for byte as they are in the repository)
       - name: Keep line ends as they are
         shell: bash
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
 
-      # (of the copies of other repositories only the one this build is made from: PC)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -91,8 +72,6 @@ jobs:
           cd ../../../out
           bash ../fork/ci-dlls.sh Realism64/sm64coopdx.exe Realism64
           while IFS= read -r mod; do test -f "Realism64/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
-          # The mod that is the game is in the program, not in the mods folder. Started once (it stops at the
-          # ROM, which isn't here), the program has written its files out.
           test ! -e Realism64/mods/Gore-Hardmode
           mkdir -p starttest
           (timeout 120 Realism64/sm64coopdx.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
@@ -112,9 +91,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # Linux, flat screen: the official game (the way its own workflow builds it)
-  # ------------------------------------------------------------------------------------------------------
   linux:
     name: PC (Linux)
     if: >-
@@ -123,7 +99,6 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-      # (of the copies of other repositories only the one this build is made from: PC)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -155,8 +130,6 @@ jobs:
           cp ../fork/README-linux.txt Realism64/README.txt
           cp ../fork/icon/icon.png Realism64/icon.png
           chmod +x Realism64/sm64coopdx
-          # As built, the program finds libdiscord_game_sdk.so only when it is started from inside its own
-          # folder. Now it looks next to itself, wherever it is started from.
           patchelf --set-rpath '$ORIGIN' Realism64/sm64coopdx
           here="$PWD"
           (cd / && ldd "$here/Realism64/sm64coopdx") > "$RUNNER_TEMP/ldd.txt"
@@ -164,12 +137,10 @@ jobs:
           if grep -q "not found" "$RUNNER_TEMP/ldd.txt"; then exit 1; fi
           grep -q "Realism64/libdiscord_game_sdk.so" "$RUNNER_TEMP/ldd.txt"
           while IFS= read -r mod; do test -f "Realism64/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
-          # It starts: as far as looking for the ROM, which isn't here.
           mkdir -p "$RUNNER_TEMP/save"
           (cd / && timeout 120 "$here/Realism64/sm64coopdx" --headless --hide-loading-screen --savepath "$RUNNER_TEMP/save") > "$RUNNER_TEMP/start.txt" 2>&1 || true
           tail -n 20 "$RUNNER_TEMP/start.txt"
           grep -q "could not find valid vanilla us sm64 rom" "$RUNNER_TEMP/start.txt"
-          # (and by then it has written out the mod that is compiled into it, which is in no mods folder)
           test ! -e Realism64/mods/Gore-Hardmode
           bash ../fork/ci-embedded.sh "$RUNNER_TEMP/save" ../game ..
           echo "::notice title=Linux build::starts as far as asking for the ROM; from the system it needs: $(objdump -p Realism64/sm64coopdx | awk '/NEEDED/ { printf "%s ", $2 }')"
@@ -185,11 +156,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # macOS, flat screen: the official game, once for Apple's own processors and once for Intel's (the way
-  # its own workflow builds them: GLEW and SDL2 are compiled here, so that the app runs on older systems
-  # than the one that built it)
-  # ------------------------------------------------------------------------------------------------------
   macos:
     name: PC (macOS, ${{ matrix.name }})
     if: >-
@@ -218,7 +184,6 @@ jobs:
     env:
       PKG_CONFIG_PATH: ${{ matrix.prefix }}/lib/pkgconfig
     steps:
-      # (of the copies of other repositories only the one this build is made from: PC)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -229,7 +194,6 @@ jobs:
             !/Android/
             !/WiiU/
 
-      # (the game's Makefile wants GNU make and cp, the assembler of mingw-w64, and a "cpp-<number>" of gcc)
       - name: Install build tools
         run: |
           brew install make mingw-w64 pkg-config coreutils
@@ -238,7 +202,6 @@ jobs:
 
       - name: Compile GLEW
         run: |
-          # (not in the checkout: everything in it that isn't the game's source is taken for part of the mod)
           cd "$RUNNER_TEMP"
           export MACOSX_DEPLOYMENT_TARGET=${{ matrix.oldest }}
           curl -f -L -o glew.tar.gz https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.tgz
@@ -263,7 +226,6 @@ jobs:
       - name: Build
         run: bash fork/ci.sh "Build" gmake -C game OSX_BUILD=1 -j$(sysctl -n hw.ncpu)
 
-      # The app is signed by nobody ("ad hoc"): enough for it to run, and macOS asks before the first start.
       - name: Pack
         run: |
           bash fork/ci.sh "Pack" bash -e -x <<'STEP'
@@ -275,7 +237,6 @@ jobs:
           plutil -p $app/Contents/Info.plist
           test "$(plutil -extract NSMicrophoneUsageDescription raw $app/Contents/Info.plist | wc -c)" -gt 10
           while IFS= read -r mod; do test -f "$app/Contents/Resources/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
-          # Everything the program asks for is in the app or part of macOS, and it is for this processor.
           otool -L $app/Contents/MacOS/sm64coopdx | tee "$RUNNER_TEMP/libs.txt"
           if tail -n +2 "$RUNNER_TEMP/libs.txt" | grep -v -E '^[[:space:]]*(@executable_path|@rpath|@loader_path|/usr/lib/|/System/)'; then
             echo "the program asks for a library that is not in the app"
@@ -284,13 +245,11 @@ jobs:
           lipo -archs $app/Contents/MacOS/sm64coopdx | grep -q -x "${{ matrix.arch }}"
           codesign --force --deep --sign - $app
           codesign --verify --deep --strict $app
-          # It starts: as far as looking for the ROM, which isn't here.
           here="$PWD"
           mkdir -p "$RUNNER_TEMP/save"
           (cd / && gtimeout 120 "$here/$app/Contents/MacOS/sm64coopdx" --headless --hide-loading-screen --savepath "$RUNNER_TEMP/save") > "$RUNNER_TEMP/start.txt" 2>&1 || true
           tail -n 20 "$RUNNER_TEMP/start.txt"
           grep -q "could not find valid vanilla us sm64 rom" "$RUNNER_TEMP/start.txt"
-          # (and by then it has written out the mod that is compiled into it, which is in no mods folder)
           test ! -e "$app/Contents/Resources/mods/Gore-Hardmode"
           bash ../fork/ci-embedded.sh "$RUNNER_TEMP/save" ../game ..
           codesign --verify --deep --strict $app
@@ -307,9 +266,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # Windows, PC VR (OpenXR): the VR fork. This program also plays on a flat screen.
-  # ------------------------------------------------------------------------------------------------------
   pcvr:
     name: PC VR (Windows)
     if: >-
@@ -327,7 +283,6 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.eol lf
 
-      # (of the copies of other repositories only the one this build is made from: VR)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -360,8 +315,6 @@ jobs:
       - name: Build
         run: bash fork/ci.sh "Build" make -C game -j$(nproc)
 
-      # The layout of the VR fork's own package (its tools/package-vr-windows.ps1), without the "speech"
-      # folder: that is the offline dictation for the chat box, a 180 MB download and a build of its own.
       - name: Pack
         run: |
           bash fork/ci.sh "Pack" bash -e -x <<'STEP'
@@ -371,8 +324,6 @@ jobs:
           cp build/us_pc/sm64coopdx.exe ../$stage/SM64-Co-Op-DX-VR.exe
           cp build/us_pc/discord_game_sdk.dll build/us_pc/normal_maps.bin ../$stage/
           cp -r build/us_pc/dynos build/us_pc/lang build/us_pc/mods build/us_pc/palettes build/us_pc/sonic_shoes ../$stage/
-          # The OpenXR loader is asked for when VR starts, not when the program does, so it is named here. It
-          # brings the compiler's runtime along; all with their licences.
           bash ../fork/ci-dlls.sh ../$stage/SM64-Co-Op-DX-VR.exe ../$stage libopenxr_loader.dll
           test -f ../$stage/libopenxr_loader.dll
           cp docs/PC-VR-PLAYER-GUIDE.txt ../$stage/README.txt
@@ -380,8 +331,6 @@ jobs:
           cp docs/VR-SPEEDRUN.txt docs/PROPELLER-MUSHROOM.txt docs/PHYSICAL-JUMPING.txt docs/PHYSICAL-SWIMMING.txt docs/POWER-UP-SPAWN-WEIGHTS.txt ../$stage/
           cd ../out
           while IFS= read -r mod; do test -f "Realism64-VR/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
-          # The mod that is the game is in the program, not in the mods folder. Started once, the program
-          # has written its files out before it looks for a headset or the ROM (whatever it does after).
           test ! -e Realism64-VR/mods/Gore-Hardmode
           mkdir -p starttest
           (timeout 120 Realism64-VR/SM64-Co-Op-DX-VR.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
@@ -401,9 +350,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # Android phones and tablets: the Android port
-  # ------------------------------------------------------------------------------------------------------
   android:
     name: Android (APK)
     if: >-
@@ -412,7 +358,6 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
-      # (of the copies of other repositories only the one this build is made from: Android)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -434,13 +379,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          # (the app's build would fetch this itself, and has failed doing so)
           bash fork/ci.sh "Install the NDK" "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
 
       - name: Get the game and change it
         run: python3 fork/apply.py android game
 
-      # (the app is built from files that the PC build of the game makes, so that comes first)
       - name: Build the game for this machine
         run: bash fork/ci.sh "Build the game for this machine" make -C game -j$(nproc) TOUCH_CONTROLS=1
 
@@ -458,8 +401,6 @@ jobs:
           cp game/platform/app/build/outputs/apk/release/app-release.apk out/Realism64-Android.apk
           unzip -l out/Realism64-Android.apk > "$RUNNER_TEMP/apk.txt"
           while IFS= read -r mod; do grep -q -F "assets/mods/$mod/built-in.txt" "$RUNNER_TEMP/apk.txt"; done < game/fork-built-in-mods.txt
-          # The mod that is the game is in the program (one of the app's libraries), not among its files.
-          # (The app can't be started here; the name of the mod's last file is looked for in the library.)
           if grep -q -F "assets/mods/Gore-Hardmode/" "$RUNNER_TEMP/apk.txt"; then exit 1; fi
           rm -rf "$RUNNER_TEMP/apk" && mkdir -p "$RUNNER_TEMP/apk"
           unzip -q -o out/Realism64-Android.apk 'lib/arm64-v8a/*' -d "$RUNNER_TEMP/apk"
@@ -476,9 +417,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # Quest (standalone): the VR fork's Android project
-  # ------------------------------------------------------------------------------------------------------
   quest:
     name: Quest (APK)
     if: >-
@@ -487,7 +425,6 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
-      # (of the copies of other repositories only the one this build is made from: VR)
       - name: Check out the mod
         uses: actions/checkout@v4
         with:
@@ -514,9 +451,6 @@ jobs:
       - name: Get the game and change it
         run: python3 fork/apply.py vr game
 
-      # The app's build takes the files a PC build of the game generates (sounds, text, textures, level
-      # headers) from that build's folder. Building the game for this machine makes them all; the parts of
-      # it that don't compile here don't matter, the app compiles its own.
       - name: Make the generated files
         run: |
           make -C game -k -j$(nproc) > "$RUNNER_TEMP/host-build.log" 2>&1 || true
@@ -547,8 +481,6 @@ jobs:
           cp game/platform/android/app/build/outputs/apk/debug/app-debug.apk out/Realism64-VR-Quest.apk
           unzip -l out/Realism64-VR-Quest.apk > "$RUNNER_TEMP/apk.txt"
           while IFS= read -r mod; do grep -q -F "assets/mods/$mod/built-in.txt" "$RUNNER_TEMP/apk.txt"; done < game/fork-built-in-mods.txt
-          # The mod that is the game is in the program (one of the app's libraries), not among its files.
-          # (The app can't be started here; the name of the mod's last file is looked for in the library.)
           if grep -q -F "assets/mods/Gore-Hardmode/" "$RUNNER_TEMP/apk.txt"; then exit 1; fi
           rm -rf "$RUNNER_TEMP/apk" && mkdir -p "$RUNNER_TEMP/apk"
           unzip -q -o out/Realism64-VR-Quest.apk 'lib/arm64-v8a/*' -d "$RUNNER_TEMP/apk"
@@ -565,10 +497,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # ------------------------------------------------------------------------------------------------------
-  # A release with what was built (fork/ci-release.sh). Also when some builds were left out or failed: the
-  # ones that did get built are released.
-  # ------------------------------------------------------------------------------------------------------
   release:
     name: Release
     needs: [pc, linux, macos, pcvr, android, quest]
@@ -581,7 +509,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      # (none of the copies of other repositories: the release needs fork/ only)
       - uses: actions/checkout@v4
         with:
           sparse-checkout-cone-mode: false

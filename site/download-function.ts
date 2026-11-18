@@ -1,11 +1,3 @@
-// Supabase Edge Function "gore-hardmode-download": the download link of the mod.
-//
-//   https://abbvdidkxhdrzapvbidf.supabase.co/functions/v1/gore-hardmode-download
-//
-// The zip lies in a private storage bucket. This asks for the login (the browser's own user/password box) and
-// sends whoever knows it on to a link to the file that is good for two minutes.
-// The login is not in this file: it is in the project's secrets, DOWNLOAD_USER and DOWNLOAD_PASS.
-// (Deployed with "verify JWT" off, so that a browser can open it.)
 
 const PROJECT = "https://abbvdidkxhdrzapvbidf.supabase.co";
 const BUCKET = "mod-transfer-48bfea945611a69b";
@@ -22,7 +14,6 @@ function text(status: number, body: string, headers: Record<string, string> = {}
 }
 
 function same(a: string, b: string) {
-  // (Every character is looked at, whatever the outcome.)
   let differ = a.length ^ b.length;
   const length = Math.max(a.length, b.length);
   for (let i = 0; i < length; i++) differ |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
@@ -71,7 +62,7 @@ Deno.serve(async (request: Request) => {
   const userOk = given !== null && same(given.user, user);
   const passOk = given !== null && same(given.pass, pass);
   if (!userOk || !passOk) {
-    if (given !== null) await new Promise((resolve) => setTimeout(resolve, 500)); // (guessing is slow)
+    if (given !== null) await new Promise((resolve) => setTimeout(resolve, 500));
     return text(401, "Login required.\n", { "WWW-Authenticate": `Basic realm="${REALM}", charset="UTF-8"` });
   }
 

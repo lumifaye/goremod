@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Turns a checkout of SM64 Coop DX (or of one of two forks of it) into this project's build of the game.
 
     python3 fork/apply.py <base> <directory>
@@ -48,9 +47,6 @@ import zipfile
 
 GAME_TITLE = "Realism64!!- COOP NET SUPPORT!!!111"
 
-# Added to the game's version ("v1.5.1" -> "v1.5.1-gore1"). Two players can only join each other when their
-# versions are the same text, so raise the number whenever a change here (or in a built-in mod's C side)
-# makes old and new builds unfit to play together.
 VERSION_SUFFIX = "-gore1"
 
 COOPNET_GAME = "lumi64"

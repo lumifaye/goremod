@@ -1,7 +1,3 @@
--- Whose save a game uses ("The host's stores" in persist.lua), tried without the game.
--- Three games (a host and two guests) run persist.lua side by side; the game's functions and the network
--- between them are faked. Run it from the top of the repository with any Lua 5.3 or 5.4:
---     lua fork/tests/persist_net_test.lua
 local SRC = "persist.lua"
 local wire = {}
 local games = {}

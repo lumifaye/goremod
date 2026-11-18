@@ -116,9 +116,6 @@ function spawn_sync_if_main(behaviorId, modelId, x, y, z, objSetupFunction, i)
     end
 end
 
--- Something that happens to one player: his own game makes the object.
--- (This used to go through the function above with the player's number, which only ever said yes for the host's
--- own Mario. Anybody else's flames, 100-coin Bob-omb and puffs of smoke were never made, for anyone.)
 function spawn_sync_if_owner(behaviorId, modelId, x, y, z, objSetupFunction, playerIndex)
     if playerIndex == 0 then
         return spawn_sync_object(behaviorId, modelId, x, y, z, objSetupFunction)

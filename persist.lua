@@ -128,7 +128,6 @@ local function store_cells(st)
     return cells
 end
 
--- In somebody else's game. What is remembered there is the host's: see "The host's stores".
 local sNet = {
     serial = 0,
 }
@@ -1080,9 +1079,6 @@ if HOOK_ON_EXIT ~= nil then
     hook_event(HOOK_ON_EXIT, flush_all)
 end
 
---- Forgets every stain and cap, in memory, on disk and in the current area. (Mod Menu button)
---- A guest only forgets what his game shows: the save is the host's, and his own save is not in this game.
---- The host's guests forget with him.
 function gore_persist_wipe(told)
     sStores = {}
     sCapCandidates = {}
@@ -1130,28 +1126,6 @@ function gore_persist_wipe(told)
     return is_guest()
 end
 
--------------------------------------------------------------------------------------------------------
--- The host's stores
---
--- Every game used to keep its own: whoever joined a game saw the blood, caps and bodies of his own save in it,
--- and took what happened there home in his save. Now what is remembered in a game is the host's:
---
---   * A guest doesn't read his save and doesn't write to it (store_get, store_write_disk). It is there again,
---     untouched, when he plays alone or hosts.
---   * When a guest comes into an area, he asks the host for it ("ask"), and the host sends what he has of it
---     ("data"): bodies and caps first, then the blood, a few packets a frame. Every entry of the host has a number,
---     in the order it was put into a store; the guest says the highest one he has had of that area, so the next
---     time only what is new is sent.
---   * What happens in front of a guest, he notes himself, as before, so it is there at once. If the host isn't
---     there to see it (another level, another act), the guest tells him ("tell"), and it goes into the host's save.
---   * A dead Mario (or a cap) isn't at exactly the same spot in two games. One that comes from the host is left out
---     when this game has noted one itself, in the same colours, within NEAR units of it; and the host leaves out
---     what a second guest tells him about something a first one has just told him.
---   * The host wipes: his guests forget as well ("wipe"). A guest wipes: only what his own game shows.
---
--- A packet is a table: its `type`, the area's key, and up to PACK_STRINGS strings of records (keys 1, 2, ...); the
--- game takes strings of up to 256 characters.
--------------------------------------------------------------------------------------------------------
 do
 local PKT_ASK, PKT_DATA, PKT_TELL, PKT_WIPE = 20, 21, 22, 23
 local PACK_CHARS    = 250
@@ -1572,22 +1546,6 @@ hook_event(HOOK_UPDATE, function()
     end
 end)
 
--------------------------------------------------------------------------------------------------------
--- Looks
---
--- A Mario model (and a cap) looks at a player for its colours, and a Mario model also for its face, its cap,
--- its hands and the lean of its body. A dead Mario is drawn as "our" player. So for the instant he is drawn, our
--- player gets his colours, dead eyes, limp hands and no lean, and the same goes for the colours of a cap that
--- stayed behind. Everything is handed back as soon as the game is done drawing that one body or cap (it says so:
--- "hookProcess"). For a game that doesn't say so, it is also handed back before the next thing of ours is drawn
--- (our Mario, a flying cap of ours), at the end of the frame, and again before the game looks at any of it.
---
--- Hair. Characters of Character Select with hair (or a tail, a skirt) that swings keep, for every player, where
--- that hair was a frame ago: `_G.physBoneMem[player]`, the "physbones" all those character mods share. A dead body
--- drawn as our player used our player's memory: his hair was told it had jumped from the body to him and back,
--- every frame, and flew about. So a body brings its own memory along, for the instant it is drawn.
--------------------------------------------------------------------------------------------------------
--- (In a block of its own: a file can only have 200 names at its top, and this one is nearly there.)
 do
 local sLive = nil
 local sShownKey = nil
@@ -2168,8 +2126,6 @@ function gore_blast_fling(m, o, push)
     return true
 end
 
--- (One name for all of it, and the rest in a block of its own: a Lua file can have 200 local names, and this one
--- is close to that.)
 local sReal = {}
 do
 local REAL_FLINCH, REAL_FLOOR, REAL_HEAD, REAL_HALF, REAL_RAM = 1, 2, 3, 4, 5

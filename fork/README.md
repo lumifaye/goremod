@@ -1,8 +1,8 @@
-# Realism64: the game with this mod built in
+# Realism64
 
-A build of SM64 Coop DX in which GORE / Hard-Mode is part of the game, the object limit is 30,000 instead of
-1,200, and which comes in seven kinds. Its window and its Android apps are called
-"Realism64!!- COOP NET SUPPORT!!!111"; to CoopNet it is `lumi64`.
+Realism64 is SM64 Coop DX with GORE / Hard-Mode built in and the object limit raised from 1,200 to 30,000.
+There are seven builds, plus a separate Wii U test build. The window and Android apps are called
+"Realism64!!- COOP NET SUPPORT!!!111" and the CoopNet name is `lumi64`.
 
 | Build | For | Made from | What comes out |
 | --- | --- | --- | --- |
@@ -13,8 +13,7 @@ A build of SM64 Coop DX in which GORE / Hard-Mode is part of the game, the objec
 | `android` | Android phones and tablets | [ManIsCat2/sm64coopdx](https://github.com/ManIsCat2/sm64coopdx), branch `android` (Av1.5.1) | `Realism64-Android.apk` |
 | `quest` | Quest, standalone | the same source as `pcvr` (its `platform/android`) | `Realism64-VR-Quest.apk` |
 
-There is an eighth, for a Wii U with homebrew, built apart from the seven and **not tried on a console**:
-`Realism64-WiiU.zip`. See "The Wii U folder".
+There is also `Realism64-WiiU.zip` for a Wii U with homebrew. It is built separately. See "The Wii U folder" for the testing status and known issues.
 
 The three sources are in this repository, each as it is at one fixed commit: the folders `PC`, `VR` and
 `Android` at the top (see "Copies of the sources"). A build copies the one it needs, `apply.py` changes that
@@ -36,7 +35,7 @@ that the game then loads it, and what the menus look like without its entry, nob
 - from the Actions tab, "Build Realism64" → "Run workflow" (once the file is on `main`), or
 - on a push whose commit message contains `[build]` (all of them) or `[build pc]`, `[build linux]`,
   `[build macos]`, `[build pcvr]`, `[build android]`, `[build quest]` (one of them; more than one can be
-  named). Other pushes start nothing.
+  named). Other pushes skip the build jobs. To skip the workflow runs entirely, put `[skip ci]` in the commit message.
 
 What got built becomes a release on the repository's "Releases" page, "Realism64 build <number>" with the
 tag `build-<number>` (`fork/ci-release.sh`). Releases stay until somebody deletes them and anybody can
@@ -46,8 +45,8 @@ released too and says so in its title. The same files are on the run's page unde
 side by side. On a private repository that
 comes out of the monthly allowance, and there Windows minutes count double and Mac minutes ten times.
 
-The steps that build run through `fork/ci.sh`: when one fails, the lines that say why are on the run's page
-as annotations, without opening the log. `fork/ci-dlls.sh` packs the DLLs a Windows program needs.
+The build steps use `fork/ci.sh`. If one fails, the reason shows up as annotations on the run page
+without opening the log. `fork/ci-dlls.sh` packs the DLLs a Windows program needs.
 
 ### Linux and Mac
 
@@ -77,7 +76,7 @@ own README says.
 
 ## What is changed
 
-All of it is in `apply.py`, with the numbers and names at the top of the file.
+The game changes are in `apply.py`. The numbers and names are at the top of the file.
 
 1. **Object limit.** `OBJECT_POOL_CAPACITY` 1200 → 30000 (`OBJECT_POOL`). It can't be switched off: the
    objects live in a fixed table, 2.4 kB each, used or not (73 MB at 30,000), and the game counts them in a
@@ -157,15 +156,14 @@ All of it is in `apply.py`, with the numbers and names at the top of the file.
    hitboxes, which are often wider than they look. Raise the slider again if short enemies are too hard
    to reach. A punch still has to be swung (grip closed, fast enough), and stays live for about a second.
 
-The two Windows builds use the same settings and saves folder as the games they are made from.
+The two Windows builds use the same saves and settings folders as the games they are based on.
 
-Not in the PC VR zip: the `speech` folder (offline dictation for the chat box). The VR fork builds that on
-the author's machine, with a 180 MB download.
+The PC VR zip doesn't include `speech` (offline chat dictation). The VR fork builds it separately and needs a 180 MB download.
 
 ## VR players, as the others see them
 
-The VR fork shows a VR player's tracked hands, his power-ups and his special moves to nobody but himself;
-it has no network code for them. That part is new here, and it is in the mod (`vrsync.lua`), not in the game:
+The VR fork only shows tracked hands, power-ups and special moves to the VR player. It has no network code for them.
+This mod adds that part in `vrsync.lua`:
 
 - The two VR builds get four Lua functions, `vr_net_state()`, `vr_net_head()`, `vr_net_pop_hit()` and
   `vr_net_pop_event()`. The first says where the hands are, whether they are closed, whether one holds his
@@ -252,7 +250,7 @@ its head isn't turned.
 
 ## Voice chat
 
-The VR fork has voice chat between its own builds. The flat builds now have the other end of it
+The VR fork already has voice chat. The flat builds have the other end of it
 (`src/pc/network/fork_voice.c`, written by `apply.py`): the same two packets and the same sound format
 (16 kHz mono, mu-law, 20 ms a packet), so all four builds hear each other. Options > Sound has three new
 entries on the flat builds:
@@ -270,8 +268,8 @@ to the flat builds and dropped; nothing sends it any more.
 
 ## Characters of Character Select
 
-What is left of a player used to be Mario (or Luigi, Toad, Waluigi, Wario), whoever he had picked in
-Character Select. Now:
+Bodies used to turn into Mario (or Luigi, Toad, Waluigi or Wario) no matter who was picked in
+Character Select. Here is what happens now:
 
 - A body that stays in the level, and a cap that stays behind, remember which character and which
   costume they were (`g` and `j` of an entry in `persist.lua`: a number made from the name the character
@@ -329,7 +327,7 @@ the network faked): `lua fork/tests/persist_net_test.lua` from the top of the re
 
 ### One of everything
 
-The rule the mod follows now, for anything all players are meant to see or hear:
+For anything everyone is supposed to see or hear, the mod follows these rules:
 
 - **It happens to a player** (he splats, loses his head, hits a wall): his own game makes the shared
   object and sends the sound. Nobody else's does.
@@ -338,7 +336,7 @@ The rule the mod follows now, for anything all players are meant to see or hear:
   (`squishblood_local`, `spawn_non_sync_object`, `local_play`). A trophy is the exception: one game
   makes it for all (`spawn_sync_if_main`).
 
-What did not follow it, and does now:
+Things that didn't follow those rules before, but do now:
 
 - `mario_update` in `main.lua` was hooked for every player and then worked on the local Mario, so it ran
   once per player in the level each frame. With four players, every timer in it (the splat, the gas, the
@@ -353,12 +351,11 @@ What did not follow it, and does now:
   stopwatch, Chuckya: one shared object and one sent sound from every player, for one event. The goal
   post gave a trophy per player.
 
-Not changed, known: two players dying in the same instant can count as one in the death counter (each
-game adds one to the number it last heard).
+Known issue: two players dying at the same time can count as one death (each game adds one to the last number it heard).
 
 ## Adding a mod
 
-Upload its zip to the repository named in `MODS_REPO` in `apply.py`
+Upload the mod zip to the repository named in `MODS_REPO` in `apply.py`
 ([lumifaye/mbjmnmnmnmn](https://github.com/lumifaye/mbjmnmnmnmn)), then build (a commit here with `[build]`
 in its message). Every zip at the top of that repository is one mod: the zip holds the mod's folder, or the
 mod's files themselves. A mod that is a single `.lua` file goes into a folder, named `main.lua`. A folder
@@ -374,10 +371,10 @@ The build's first lines say which is which, and the build stops when a mod can't
 folder or file name starting with `_` (Android leaves those out of an app), 35 MB or more (the game's
 limit), or a mod that names `gore` as incompatible.
 
-The build takes the newest state of that repository's `main` branch. To stay with one state, put a commit id
-in `MODS_REF`. To build without the network: `MODS_DIR=<a checkout of it> python3 fork/apply.py pc game`.
+The build uses the latest `main` from that repository. To pin it, put a commit ID in `MODS_REF`.
+To build without the network: `MODS_DIR=<a checkout of it> python3 fork/apply.py pc game`.
 
-Players of an older build can still join: they get the host's mods the usual way. Raise `VERSION_SUFFIX`
+Players on an older build can still join and get the host's mods the usual way. Raise `VERSION_SUFFIX`
 (`-gore2`) when old and new builds must not join each other.
 
 ### With the other built-in mods
@@ -391,9 +388,8 @@ Players of an older build can still join: they get the host's mods the usual way
 
 ## Changing the mod
 
-Changes to the Lua files need a new build to reach players, like before they needed a new download. Players
-of different builds can still join each other as long as `VERSION_SUFFIX` is the same: the host's copy of the
-mod is sent to whoever doesn't have that exact one.
+Lua changes need a new build before players get them. Players on different builds can still join as long as
+`VERSION_SUFFIX` matches: the host sends their copy of the mod to anyone who doesn't have it.
 
 ## Copies of the sources
 
@@ -415,7 +411,7 @@ disappears. Each build job checks out only the folder it needs. Where the folder
 fetches the same commit from the original instead; the line "the game's source is ..." on the run's page
 says which it was.
 
-Leave `PC`, `VR` and `Android` as they are: what this project changes in the game is written in `apply.py`, as text that
+Leave `PC`, `VR` and `Android` alone: the game changes are in `apply.py`, as text that
 has to be found in the files exactly. `apply.py` knows what the files of each commit are (`tree` in `BASES`)
 and a build whose folder is no longer that says so with a warning on the run's page, and builds from the
 folder all the same. To move a base to a newer commit, replace the folder with the files of that commit and
@@ -428,8 +424,7 @@ to v1.5.1 put into it (206 commits of the game, 9 of the port, joined with `git 
 version the players of the other builds have: `src/pc/network/version.h` says `v1.5.1`, number 42. Its files
 are tree `f3c2baec04a00cd3703dc883a6fc1ec6b22915ec`.
 
-**It builds with the real Wii U compiler. It has not been run**, not on a console and not in an emulator.
-See "Building it" for how, and "What was checked" for what stands behind it.
+**It builds with the real Wii U compiler, but console testing is limited.** See "Building it" and "The picture on a console" below for the testing and known issues.
 
 The two sides had changed the same place in 34 files. Each was settled by hand, by one rule: the game's
 v1.5.1 code, with what the port needs to run on the console kept (the parts under `TARGET_WII_U`). Where
@@ -581,8 +576,8 @@ changing the picture, run `make.py` again and commit what it wrote.
 | Android | the launcher icons (square, round and "adaptive": the picture inside its own background colour) |
 | Quest | a launcher icon; the app had none before |
 
-The picture need not be square: it is centred on a square of the colour of its top left corner. It is not
-part of the mod (`fork/apply.py` and `site/build.mjs` leave it out).
+The picture doesn't have to be square. It is centred on a square using the colour of its top left corner.
+It isn't part of the mod (`fork/apply.py` and `site/build.mjs` leave it out).
 
 ## The signing key
 

@@ -1,9 +1,3 @@
-// Builds the download page: packs the mod (everything in the repository except this folder) into one zip
-// and writes it, with the page, to the output folder.
-//
-//   node build.mjs [output folder]        (default: ./public, which is what Vercel serves)
-//
-// No dependencies: the zip is written here, with Node's own zlib.
 
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -16,14 +10,10 @@ const SITE = dirname(fileURLToPath(import.meta.url));
 const MOD = resolve(SITE, '..');
 const OUT = resolve(process.argv[2] ?? join(SITE, 'public'));
 
-const FOLDER = 'Gore-Hardmode';      // the folder inside the zip: what ends up in sm64coopdx's "mods"
+const FOLDER = 'Gore-Hardmode';
 const ZIP_NAME = 'Gore-Hardmode.zip';
-// Not part of the mod. (Anything that starts with a dot is left out as well.)
 const SKIP_AT_TOP = new Set(['site', 'fork', 'release', 'dist', 'node_modules', 'Untitled.png', 'WiiU', 'PC', 'VR', 'Android']);
 
-// ---------------------------------------------------------------------------------------------------
-// The files
-// ---------------------------------------------------------------------------------------------------
 function collect(dir, prefix, list) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.startsWith('.')) continue;
@@ -35,9 +25,6 @@ function collect(dir, prefix, list) {
     return list;
 }
 
-// ---------------------------------------------------------------------------------------------------
-// The zip
-// ---------------------------------------------------------------------------------------------------
 let crcTable = null;
 function crc32(data) {
     if (typeof zlib.crc32 === 'function') return zlib.crc32(data) >>> 0;
@@ -60,7 +47,6 @@ function dosTime(date) {
     return { time, day };
 }
 
-/** @param {{ name: string, data: Buffer }[]} files */
 function zip(files, date) {
     const { time, day } = dosTime(date);
     const parts = [];
@@ -70,15 +56,15 @@ function zip(files, date) {
     for (const file of files) {
         const name = Buffer.from(file.name, 'utf8');
         const packed = zlib.deflateRawSync(file.data, { level: 9 });
-        const stored = packed.length >= file.data.length; // (already compressed: sound, textures)
+        const stored = packed.length >= file.data.length;
         const body = stored ? file.data : packed;
         const crc = crc32(file.data);
 
         const local = Buffer.alloc(30);
         local.writeUInt32LE(0x04034b50, 0);
-        local.writeUInt16LE(20, 4);                 // version needed
-        local.writeUInt16LE(0x0800, 6);             // names are UTF-8
-        local.writeUInt16LE(stored ? 0 : 8, 8);     // method
+        local.writeUInt16LE(20, 4);
+        local.writeUInt16LE(0x0800, 6);
+        local.writeUInt16LE(stored ? 0 : 8, 8);
         local.writeUInt16LE(time, 10);
         local.writeUInt16LE(day, 12);
         local.writeUInt32LE(crc, 14);
@@ -89,7 +75,7 @@ function zip(files, date) {
 
         const entry = Buffer.alloc(46);
         entry.writeUInt32LE(0x02014b50, 0);
-        entry.writeUInt16LE((3 << 8) | 20, 4);      // made on: Unix
+        entry.writeUInt16LE((3 << 8) | 20, 4);
         entry.writeUInt16LE(20, 6);
         entry.writeUInt16LE(0x0800, 8);
         entry.writeUInt16LE(stored ? 0 : 8, 10);
@@ -99,7 +85,7 @@ function zip(files, date) {
         entry.writeUInt32LE(body.length, 20);
         entry.writeUInt32LE(file.data.length, 24);
         entry.writeUInt16LE(name.length, 28);
-        entry.writeUInt32LE((0o100644 << 16) >>> 0, 38); // a plain file, rw-r--r--
+        entry.writeUInt32LE((0o100644 << 16) >>> 0, 38);
         entry.writeUInt32LE(offset, 42);
 
         parts.push(local, name, body);
@@ -117,9 +103,6 @@ function zip(files, date) {
     return Buffer.concat([...parts, directory, end]);
 }
 
-// ---------------------------------------------------------------------------------------------------
-// The page
-// ---------------------------------------------------------------------------------------------------
 function git(...args) {
     try {
         return execFileSync('git', args, { cwd: MOD, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
@@ -133,7 +116,6 @@ function version() {
     return /^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : 'unknown';
 }
 
-/** The time of the commit, so that the same commit gives the same zip. (Without git: now.) */
 function buildTime() {
     const seconds = Number(process.env.SOURCE_DATE_EPOCH || git('log', '-1', '--format=%ct'));
     return Number.isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : new Date();

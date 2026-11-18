@@ -1,12 +1,7 @@
-// Vercel runs this before every request: nothing (not the page, not the zip) is served without the login.
-// The login is not in this file. It is in the project's environment variables on Vercel:
-//   DOWNLOAD_USER, DOWNLOAD_PASS
-// Without them, nobody gets in.
 
 const REALM = 'GORE / Hard-Mode download';
 
 function same(a, b) {
-    // (Every character is looked at, whatever the outcome: how long it takes says nothing about where they differ.)
     let differ = a.length ^ b.length;
     const length = Math.max(a.length, b.length);
     for (let i = 0; i < length; i++) {
@@ -54,11 +49,9 @@ export default function middleware(request) {
     }
 
     const given = credentials(request);
-    // (Both are compared, also when the first is already wrong.)
     const userOk = given !== null && same(given.user, user);
     const passOk = given !== null && same(given.pass, pass);
     if (!userOk || !passOk) return refuse();
 
-    // Let the request through. (What `next()` of @vercel/functions returns.)
     return new Response(null, { headers: { 'x-middleware-next': '1' } });
 }
