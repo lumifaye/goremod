@@ -94,10 +94,14 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
     mConnection->Begin(nullptr);
     WIIU_COOPNET_TRACE("coopnet: sending client info\n");
 
+    uint64_t infoBits = SocketGetInfoBits(mConnection->mSocket, aDestId);
+    WIIU_COOPNET_TRACE("coopnet: network identity ready\n");
+    uint64_t fileHash = hashFile();
+    WIIU_COOPNET_TRACE("coopnet: executable hash ready\n");
     MPacketInfo({
         .destId = aDestId,
-        .infoBits = SocketGetInfoBits(mConnection->mSocket, aDestId),
-        .hash = hashFile(),
+        .infoBits = infoBits,
+        .hash = fileHash,
     }, { aName }).Send(*mConnection);
 
     WIIU_COOPNET_TRACE("coopnet: client info sent\n");
