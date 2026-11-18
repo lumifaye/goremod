@@ -15,12 +15,10 @@ Realism64-VR-Quest.apk|Quest|quest: install with SideQuest or adb"
 files=()
 have=""
 missing=""
-table=""
 while IFS='|' read -r file short use; do
     if [ -s "$folder/$file" ]; then
         files+=("$folder/$file")
         have="${have:+$have, }$short"
-        table="$table| \`$file\` | $use |"$'\n'
     else
         missing="${missing:+$missing, }$short"
     fi
@@ -39,21 +37,17 @@ if [ -n "$missing" ]; then
 fi
 
 {
-    echo "my realism version of SM64 Coop DX | [commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) | [build run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-    echo
-    echo "| File | For |"
-    echo "|---|---|"
-    printf '%s' "$table"
+    echo "my realism version of SM64 Coop DX | [commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)"
     echo
     if [ -n "$missing" ]; then
         echo "not in this build: $missing"
         echo
     fi
     if printf '%s' "$have" | grep -q "Mac"; then
-        echo "**mac:** if the unsigned app is blocked allow it in System Settings > Privacy & Security or run \`xattr -dr com.apple.quarantine Realism64.app\`."
+        echo "mac: if it won't open allow it in System Settings > Privacy & Security or run \`xattr -dr com.apple.quarantine Realism64.app\`"
         echo
     fi
-    echo "you need your own Super Mario 64 US ROM because no ROM is included"
+    echo "you need your own Super Mario 64 US ROM, it isn't included"
 } > "$notes"
 
 if gh release view "$tag" > /dev/null 2>&1; then

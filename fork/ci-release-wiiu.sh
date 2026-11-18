@@ -11,12 +11,10 @@ SM64CoopDX-WiiU.rpx|SM64 CoopDX (.rpx)|just the program, use the zip for the ful
 
 files=()
 have=""
-table=""
 while IFS='|' read -r file short use; do
     if [ -s "$folder/$file" ]; then
         files+=("$folder/$file")
         case "$file" in *.zip) have="${have:+$have, }$short";; esac
-        table="$table| \`$file\` | $use |"$'\n'
     fi
 done <<< "$all"
 
@@ -30,13 +28,11 @@ title="Wii U test build $GITHUB_RUN_NUMBER ($have) - console testing is limited"
 {
     echo "**wii u test build:** console testing is limited so it might not work | [commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)."
     echo
-    echo "| File | What it is |"
-    echo "|---|---|"
-    printf '%s' "$table"
+    echo "Realism64 is my version, SM64 Coop DX is the port without my realism changes. use the zip for the full game"
     echo
-    echo "for Aroma unzip onto your SD card and merge the \`wiiu\` folders. put your own Super Mario 64 US ROM at \`wiiu/apps/sm64coopdx/roms/baserom.us.z64\`. no ROM is included"
+    echo "unzip onto your Aroma SD card and put your own Super Mario 64 US ROM at \`wiiu/apps/sm64coopdx/roms/baserom.us.z64\` (no ROM is included)"
     echo
-    echo "mod sounds and voice chat haven't been tested on a console. includes CoopNet (AGPL v3) and libjuice (MPL 2.0), source and licenses are in \`WiiU/third_party\`."
+    echo "mod sounds and voice chat haven't been tested on a console. CoopNet (AGPL v3) and libjuice (MPL 2.0) source and licenses: \`WiiU/third_party\`"
 } > "$notes"
 
 if gh release view "$tag" > /dev/null 2>&1; then
