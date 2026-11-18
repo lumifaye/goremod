@@ -6,7 +6,7 @@ local function environment(server, localGlobal, permission)
     env.RESOLUTION_N64 = 1
     env.GRAPH_RENDER_ACTIVE, env.GRAPH_RENDER_INVISIBLE = 1, 16
     env.hooks, env.sent, env.flings = {}, {}, {}
-    env.gOpt = { wiiu_touch_fling = permission }
+    env.gOpt = { wiiu_touch_fling = permission, wiiu_host_control = true, wiiu_receive_fling = true }
     env.timer, env.sender, env.touch = 100, nil, nil
     env.gLakituState = { pos = { x = 0, y = 0, z = 0 } }
     env.gNetworkPlayers, env.gMarioStates = {}, {}
@@ -69,9 +69,38 @@ client.touch = {0.5,0.6}; client.hooks[2](); assert(#client.sent==0, 'disabled c
 client.gOpt.wiiu_touch_fling = true
 client.touch = {0.5,0.6}; client.hooks[2](); assert(#client.sent==1 and client.sent[1].data.type=='gore_wiiu_touch_request', 'client sends host request')
 client.sender = client.network_local_index_from_global(1)
-client.hooks[1]({type='gore_wiiu_touch_fling', attacker=1}); assert(#client.flings==0, 'forged non-host ignored')
+client.hooks[1]({type='gore_wiiu_touch_fling', attacker=1, clientChoice=false}); assert(#client.flings==0, 'forged non-host ignored')
 client.gOpt.wiiu_touch_fling = false
 client.sender = client.network_local_index_from_global(0)
-client.hooks[1]({type='gore_wiiu_touch_fling', attacker=1}); assert(#client.flings==1 and client.flings[1].victim.id==2 and client.flings[1].power==60, 'host fling runs on owning client')
-client.hooks[1]({type='gore_wiiu_touch_fling', attacker=9}); assert(#client.flings==1, 'invalid attacker ignored')
+client.hooks[1]({type='gore_wiiu_touch_fling', attacker=1, clientChoice=false}); assert(#client.flings==1 and client.flings[1].victim.id==2 and client.flings[1].power==60, 'host fling runs on owning client')
+client.hooks[1]({type='gore_wiiu_touch_fling', attacker=9, clientChoice=false}); assert(#client.flings==1, 'invalid attacker ignored')
+local freeHost = environment(true, 0, false)
+freeHost.gOpt.wiiu_host_control = false
+freeHost.sender = 1
+freeHost.hooks[1]({type='gore_wiiu_touch_request', victim=2})
+assert(#freeHost.sent==1 and freeHost.sent[1].data.clientChoice == true, 'clients may use taps when host control is off')
+freeHost.timer = 110
+freeHost.gOpt.wiiu_receive_fling = false
+freeHost.hooks[1]({type='gore_wiiu_touch_request', victim=0})
+assert(#freeHost.flings==0, 'host can opt out as victim when host control is off')
+freeHost.timer = 120
+freeHost.gOpt.wiiu_receive_fling = true
+freeHost.hooks[1]({type='gore_wiiu_touch_request', victim=0})
+assert(#freeHost.flings==1, 'host can opt in as victim when host control is off')
+local freeClient = environment(false, 2, false)
+freeClient.gOpt.wiiu_host_control = false
+freeClient.gOpt.wiiu_receive_fling = false
+freeClient.touch={0.5,0.6}; freeClient.hooks[2]()
+assert(#freeClient.sent==1, 'free mode does not block Wii U client from tapping')
+freeClient.sender = freeClient.network_local_index_from_global(0)
+freeClient.hooks[1]({type='gore_wiiu_touch_fling', attacker=1, clientChoice=true})
+assert(#freeClient.flings==0, 'recipient opt-out respected')
+freeClient.gOpt.wiiu_receive_fling = true
+freeClient.hooks[1]({type='gore_wiiu_touch_fling', attacker=1, clientChoice=true})
+assert(#freeClient.flings==1, 'recipient opt-in respected')
+freeClient.gOpt.wiiu_receive_fling = false
+freeClient.hooks[1]({type='gore_wiiu_touch_fling', attacker=1, clientChoice=false})
+assert(#freeClient.flings==2, 'host-controlled mode overrides local preference')
+freeClient.hooks[1]({type='gore_wiiu_touch_fling', attacker=1})
+assert(#freeClient.flings==2, 'missing host choice mode rejected')
 print('lua tap tests passed')
