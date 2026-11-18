@@ -4,10 +4,10 @@ tag="wiiu-$GITHUB_RUN_NUMBER"
 commit="${GITHUB_SHA:0:7}"
 notes="$(mktemp)"
 
-all="Realism64-WiiU.zip|Realism64|SM64 Coop DX with GORE / Hard-Mode built in, like the PC build (same mods and lobby list).
-SM64CoopDX-WiiU.zip|SM64 CoopDX|The Wii U port of SM64 Coop DX v1.5.1 without this project's changes.
-Realism64-WiiU.rpx|Realism64 (.rpx)|Just the program, without the files in the zip. You don't need this if you have the zip.
-SM64CoopDX-WiiU.rpx|SM64 CoopDX (.rpx)|Just the program, without the files in the zip. You don't need this if you have the zip."
+all="Realism64-WiiU.zip|Realism64|With GORE / Hard-Mode built in.
+SM64CoopDX-WiiU.zip|SM64 CoopDX|SM64 Coop DX without this project's changes.
+Realism64-WiiU.rpx|Realism64 (.rpx)|Program only; use the zip for the full package.
+SM64CoopDX-WiiU.rpx|SM64 CoopDX (.rpx)|Program only; use the zip for the full package."
 
 files=()
 have=""
@@ -28,15 +28,15 @@ fi
 title="Wii U test build $GITHUB_RUN_NUMBER ($have) - console testing is limited"
 
 {
-    echo "**This is a test build. Wii U console testing is limited, so it might not work.** It was compiled with devkitPPC and wut from commit [\`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) of \`$GITHUB_REF_NAME\`."
+    echo "**Wii U test build:** console testing is limited, so it might not work. [Commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)."
     echo
     echo "| File | What it is |"
     echo "|---|---|"
     printf '%s' "$table"
     echo
-    echo "For a Wii U with Aroma: unzip it onto the SD card, merging the zip's \`wiiu\` folder with the card's \`wiiu\` folder. Put your own Super Mario 64 US ROM at \`wiiu/apps/sm64coopdx/roms/baserom.us.z64\`. No ROM is included. The readme in the zip has the rest."
+    echo "For Aroma: unzip onto your SD card and merge the \`wiiu\` folders. Put your own Super Mario 64 US ROM at \`wiiu/apps/sm64coopdx/roms/baserom.us.z64\`. No ROM is included."
     echo
-    echo "Mod sounds and voice chat have Wii U code, but they have not been tested on a console. CoopNet (GNU AGPL v3) and libjuice (MPL 2.0) are compiled in; their source with the Wii U changes is in this repository under \`WiiU/third_party\`."
+    echo "Mod sounds and voice chat haven't been tested on a console. Includes CoopNet (AGPL v3) and libjuice (MPL 2.0); source and licenses are in \`WiiU/third_party\`."
 } > "$notes"
 
 if gh release view "$tag" > /dev/null 2>&1; then

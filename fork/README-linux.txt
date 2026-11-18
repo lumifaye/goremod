@@ -1,19 +1,13 @@
 Realism64 for Linux (64-bit Intel or AMD)
 
-To start the game, run:
+Run ./sm64coopdx. If you get permission denied, run chmod +x sm64coopdx first. Keep the files together.
 
-    ./sm64coopdx
+You need SDL2, OpenGL, libcurl and zlib:
 
-If you get "Permission denied", run chmod +x sm64coopdx first. Keep everything in this folder together, but you can put the folder wherever you want. icon.png is there if you want to make a launcher or menu entry; the game window already has the icon.
+Debian/Ubuntu/Mint: sudo apt install libsdl2-2.0-0 libcurl4 libgl1 zlib1g
+Fedora: sudo dnf install SDL2 libcurl mesa-libGL zlib
+Arch/Manjaro: sudo pacman -S sdl2 curl libglvnd zlib
 
-You need SDL2, OpenGL, libcurl and zlib installed. If the game says a library is missing:
+You need glibc 2.35 or newer. The game asks for your own Super Mario 64 US ROM on first start; no ROM is included.
 
-    Debian, Ubuntu, Mint:   sudo apt install libsdl2-2.0-0 libcurl4 libgl1 zlib1g
-    Fedora:                 sudo dnf install SDL2 libcurl mesa-libGL zlib
-    Arch, Manjaro:          sudo pacman -S sdl2 curl libglvnd zlib
-
-This was built on Ubuntu 22.04, so you need a system at least that new (glibc 2.35).
-
-The first time you start the game, drag your own Super Mario 64 US ROM onto the window. There isn't a ROM included.
-
-Your saves, settings and mods are in ~/.local/share/sm64coopdx, the same place the official game uses.
+Saves, settings and mods are in ~/.local/share/sm64coopdx. icon.png is for a launcher if you want one.

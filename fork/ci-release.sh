@@ -4,13 +4,13 @@ tag="build-$GITHUB_RUN_NUMBER"
 commit="${GITHUB_SHA:0:7}"
 notes="$(mktemp)"
 
-all="Realism64-Windows.zip|Windows|Windows, flat screen. Unpack it and start \`sm64coopdx.exe\`.
-Realism64-Linux.zip|Linux|Linux (64-bit Intel or AMD), flat screen. Unpack it and start \`sm64coopdx\`; it uses SDL2 from your system, see the \`README.txt\` in it.
-Realism64-macOS-AppleSilicon.zip|Mac (Apple silicon)|Macs with an Apple processor (M1 and later), macOS 11 or later. See below for the first start.
-Realism64-macOS-Intel.zip|Mac (Intel)|Macs with an Intel processor, macOS 11 or later. See below for the first start.
-Realism64-VR-Windows.zip|Windows VR|Windows with a PC VR headset. Unpack it and start \`SM64-Co-Op-DX-VR.exe\`.
+all="Realism64-Windows.zip|Windows|Windows: unzip and run \`sm64coopdx.exe\`.
+Realism64-Linux.zip|Linux|Linux (64-bit): unzip and run \`sm64coopdx\`. See the included README for dependencies.
+Realism64-macOS-AppleSilicon.zip|Mac (Apple silicon)|Apple silicon Mac, macOS 11+.
+Realism64-macOS-Intel.zip|Mac (Intel)|Intel Mac, macOS 11+.
+Realism64-VR-Windows.zip|Windows VR|Windows VR: unzip and run \`SM64-Co-Op-DX-VR.exe\`.
 Realism64-Android.apk|Android|Android phones and tablets.
-Realism64-VR-Quest.apk|Quest|Meta Quest headsets, installed from a computer (SideQuest or adb)."
+Realism64-VR-Quest.apk|Quest|Quest: install with SideQuest or adb."
 
 files=()
 have=""
@@ -39,7 +39,7 @@ if [ -n "$missing" ]; then
 fi
 
 {
-    echo "SM64 Coop DX with GORE / Hard-Mode built in. This build is from commit [\`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) of \`$GITHUB_REF_NAME\` ([the run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
+    echo "SM64 Coop DX with GORE / Hard-Mode built in. [Commit \`$commit\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA) | [Build run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
     echo
     echo "| File | For |"
     echo "|---|---|"
@@ -50,10 +50,10 @@ fi
         echo
     fi
     if printf '%s' "$have" | grep -q "Mac"; then
-        echo "**On Mac:** the app isn't signed by an Apple-recognized developer, so macOS may block it at first. Unzip it, try to open \`Realism64.app\` once, then allow it in System Settings > Privacy & Security (\"Open Anyway\"); on older systems right-click the app and choose Open. Or, in Terminal: \`xattr -dr com.apple.quarantine Realism64.app\`."
+        echo "**Mac:** if the unsigned app is blocked, allow it in System Settings > Privacy & Security or run \`xattr -dr com.apple.quarantine Realism64.app\`."
         echo
     fi
-    echo "You need your own Super Mario 64 US ROM. The game will ask for it the first time you start it; no ROM is included."
+    echo "You need your own Super Mario 64 US ROM. No ROM is included."
 } > "$notes"
 
 if gh release view "$tag" > /dev/null 2>&1; then
