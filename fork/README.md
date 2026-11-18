@@ -1,51 +1,47 @@
 # Realism64
 
-My realism-focused version of SM64 Coop DX, with a 30,000 object limit and PC, VR, Android and Wii U builds. The mod started as GORE / Hard-Mode, but I've heavily edited it and made it more of a realism mode.
+this is my realism version of SM64 Coop DX. it started as GORE / Hard-Mode but i heavily edited it and made it more of a realism mode
 
-The builds use their own CoopNet name (`lumi64`), so they don't join the official game's lobbies.
+it has a 30,000 object limit and builds for pc, vr, android and wii u. the builds use their own CoopNet name (`lumi64`) so they don't join the official game's lobbies
 
-You need your own Super Mario 64 US ROM. It's not included.
+you need your own Super Mario 64 US ROM because it isn't included
 
-## Builds
+## builds
 
-- Windows: `Realism64-Windows.zip`
-- Linux: `Realism64-Linux.zip`
-- Mac: `Realism64-macOS-AppleSilicon.zip` or `Realism64-macOS-Intel.zip` (macOS 11+)
-- Windows VR: `Realism64-VR-Windows.zip`
-- Android: `Realism64-Android.apk`
-- Quest: `Realism64-VR-Quest.apk`
-- Wii U: `Realism64-WiiU.zip` (test build; console testing is limited)
+- windows: `Realism64-Windows.zip`
+- linux: `Realism64-Linux.zip`
+- mac: `Realism64-macOS-AppleSilicon.zip` or `Realism64-macOS-Intel.zip` (macOS 11 or newer)
+- windows vr: `Realism64-VR-Windows.zip`
+- android: `Realism64-Android.apk`
+- quest: `Realism64-VR-Quest.apk`
+- wii u: `Realism64-WiiU.zip` (test build, console testing is limited)
 
-Linux needs SDL2, OpenGL, libcurl and zlib. On Mac, you might need to allow the unsigned app in System Settings > Privacy & Security. Quest needs SideQuest or adb. The Wii U needs Aroma and your ROM at `wiiu/apps/sm64coopdx/roms/baserom.us.z64`.
+linux needs SDL2, OpenGL, libcurl and zlib. on mac you might need to allow the unsigned app in System Settings > Privacy & Security. quest needs SideQuest or adb. for wii u you need Aroma and your ROM at `wiiu/apps/sm64coopdx/roms/baserom.us.z64`
 
-## What's different
+## what's different
 
-- My edited realism mod is built in, with its settings under **Gore Settings**. Other included mods are in the mods menu.
-- VR and flat-screen players share lobbies. VR hands and some VR items are shown to other players. VR head turning is disabled because it looked wrong in testing.
-- Voice chat works between the flat and VR builds. The microphone starts off. Wii U sound and voice chat haven't been tested on a console.
-- Character Select bodies keep their character where possible. Multiplayer blood, caps and bodies use the host's save.
-- Updates from the original games are disabled so they don't replace this build.
+- my edited realism mod is built in and its settings are under **Gore Settings**. the other included mods are in the mods menu
+- vr and flat screen players share lobbies. other players can see vr hands and some vr items. vr head turning is off because it looked wrong in testing
+- flat screen and vr builds have voice chat and the mic starts off. wii u sound and voice chat haven't been tested on a console
+- Character Select bodies keep their character where possible. multiplayer blood, caps and bodies use the host's save
+- updates from the original games are off so they don't replace this build
 
-The Windows builds use the original games' saves and settings folders. Android installs separately. The PC VR zip doesn't include offline chat dictation.
+windows builds use the original games' saves and settings folders. android installs separately. the pc vr zip doesn't include offline chat dictation
 
-## Building
+## building
 
-`build-fork.yml` can be started from Actions, or with `[build]` in a commit message. Use `[build pc]`, `[build linux]`, `[build macos]`, `[build pcvr]`, `[build android]` or `[build quest]` for individual targets. `build-wiiu.yml` uses `[wiiu]` or Actions. Use `[skip ci]` to skip workflow runs on a push. Builds on a private repo use Actions minutes.
+run `build-fork.yml` from Actions or put `[build]` in a commit message. for individual builds use `[build pc]`, `[build linux]`, `[build macos]`, `[build pcvr]`, `[build android]` or `[build quest]`. for wii u use `[wiiu]` or run `build-wiiu.yml` from Actions. use `[skip ci]` to skip workflow runs on a push. private repos use Actions minutes
 
-Releases contain the builds that succeeded. A full platform build becomes the latest release; partial builds don't. Wii U builds are prereleases.
+the releases have whatever builds succeeded. a full build becomes the latest release, partial builds don't. wii u builds are prereleases
 
-To apply the changes by hand: `python3 fork/apply.py pc game` (use `vr` or `android` for those bases). `PC`, `VR` and `Android` are copies of the upstream sources; don't edit them for this project. Changes go in `fork/apply.py` and the mod files. `WiiU` is the Wii U port with project changes.
+to apply the changes by hand use `python3 fork/apply.py pc game` (use `vr` or `android` for those bases). `PC`, `VR` and `Android` are copies of the upstream sources so don't edit them for this project. changes go in `fork/apply.py` and the mod files. `WiiU` is the wii u port with project changes
 
-## Adding mods
+## credits
 
-Upload a mod zip to the repo in `MODS_REPO` in `fork/apply.py`, then build. Mods that list the same `-- incompatible:` value are optional in the menu; the others are always on. To pin the mod repo, set `MODS_REF`; to use a local copy, set `MODS_DIR`.
+this version is my fork of SM64 Coop DX by the Coop DX team, the vr fork by fulldivegames and the android port by ManIsCat2. the wii u port is by efsmert
 
-## Credits and licenses
+the mod started from GORE / Hard-Mode! by the GORE Team: IncredibleHolc, Cooliokid956, Blocky.cmd, Birdekek, Saniky, Tilly, Isaac, Frijoles, ProfeJavix and I'mYourCat. i've heavily edited it into my own realism version so it doesn't really represent the original Hard-Mode anymore
 
-This version is my fork of SM64 Coop DX by the Coop DX team, the VR fork by fulldivegames, and the Android port by ManIsCat2. The Wii U port is by efsmert.
+wii u builds include CoopNet (GNU AGPL v3) and libjuice (MPL 2.0). their source and licenses are in `WiiU/third_party/coopnet` and `WiiU/third_party/libjuice`
 
-The mod started from GORE / Hard-Mode! by the GORE Team: IncredibleHolc, Cooliokid956, Blocky.cmd, Birdekek, Saniky, Tilly, Isaac, Frijoles, ProfeJavix and I'mYourCat. I've heavily edited it into my own realism-focused version, so it doesn't really represent the original Hard-Mode anymore.
-
-Wii U builds include CoopNet (GNU AGPL v3) and libjuice (MPL 2.0); their source and licenses are in `WiiU/third_party/coopnet` and `WiiU/third_party/libjuice`.
-
-The Android signing key is in `fork/signing/` so builds can update each other. Anyone with access to it can sign an update; use a private key before distributing to strangers.
+the android signing key is in `fork/signing/` so builds can update each other. anyone with access to it can sign an update so use a private key before distributing to strangers
