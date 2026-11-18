@@ -36,7 +36,7 @@ local function host_fling(attackerIndex, victimIndex)
     local attacker, victim = player_at(attackerIndex), player_at(victimIndex)
     if attacker == nil or victim == nil or attackerIndex == victimIndex or not same_area(attacker, victim) then return end
     if gOpt == nil then return end
-    local clientChoice = not gOpt.wiiu_host_control
+    local clientChoice = not gOpt.wiiu_force_flingable
     if victimIndex == 0 then
         fling_local(attackerIndex, clientChoice)
     else
@@ -49,7 +49,7 @@ local function packet_receive(data)
     local sender = gore_packet_sender()
     if player_at(sender) == nil or sender <= 0 then return end
     if network_is_server() and data.type == REQUEST then
-        if gOpt == nil or (gOpt.wiiu_host_control and not gOpt.wiiu_touch_fling) then return end
+        if gOpt == nil then return end
         local victim = local_index(data.victim)
         if victim == nil then return end
         local now = get_global_timer()
@@ -121,7 +121,6 @@ if wiiu_touch_pressed ~= nil then
         if x == nil or y == nil then return end
         if x < 0 or x > 1 or y < 0 or y > 1 then return end
         if djui_hud_is_pause_menu_created() or (djui_console_is_open ~= nil and djui_console_is_open()) then return end
-        if not network_is_server() and (gOpt == nil or (gOpt.wiiu_host_control and not gOpt.wiiu_touch_fling)) then return end
         local resolution = djui_hud_get_resolution()
         djui_hud_set_resolution(RESOLUTION_N64)
         local victim = tapped_player(x, y)
