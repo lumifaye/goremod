@@ -59,7 +59,9 @@ jobs:
           path: .ci/sdl2
           persist-credentials: false
       - name: Cross-compile target dependencies
-        run: xbox360-port/build-deps.sh .ci/sdl2 .ci/zlib "$RUNNER_TEMP/deps-build" "$RUNNER_TEMP/ports"
+        shell: bash
+        run: |
+          xbox360-port/build-deps.sh .ci/sdl2 .ci/zlib "$RUNNER_TEMP/deps-build" "$RUNNER_TEMP/ports" 2>&1 | tee "$RUNNER_TEMP/deps.log"
       - name: Embed Realism64 and build game title
         shell: bash
         run: |
@@ -68,6 +70,22 @@ jobs:
           make -C WiiU -j3 -k TARGET_XBOX360=1 EXTRA_INCLUDES="$ports/include" \
             XBOX_PORT_LIBS="-L$ports/lib -lSDL2" all 2>&1 | tee "$RUNNER_TEMP/game.log"
           test "$(head -c4 WiiU/build/us_xbox360/default.xex)" = XEX2
+      - name: Surface compiler errors in the check annotations
+        if: failure()
+        shell: python
+        run: |
+          import os, pathlib, re
+          for name in ('deps.log', 'game.log'):
+              path = pathlib.Path(os.environ['RUNNER_TEMP'], name)
+              if not path.is_file(): continue
+              with path.open(errors='replace') as log:
+                  count = 0
+                  for line in log:
+                      line = re.sub(r'\x1b\[[0-9;]*m', '', line).strip()
+                      if not re.search(r'error:|CMake Error|undefined reference|No rule to make', line, re.I): continue
+                      print('::error title=' + name + '::' + line[:1200].replace('%', '%25'))
+                      count += 1
+                      if count == 12: break
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -75,6 +93,7 @@ jobs:
           path: |
             ~/xsdk-gcc-work/logs/
             ${{ runner.temp }}/game.log
+            ${{ runner.temp }}/deps.log
       - uses: actions/upload-artifact@v4
         with:
           name: Realism64-Xbox360

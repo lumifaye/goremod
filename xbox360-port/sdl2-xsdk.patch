@@ -45,9 +45,18 @@ index b5c9cbb..b365a77 100644
  #define SDL_DYNAMIC_API 0 /* devkitARM doesn't support dynamic linking */
  #elif defined(DYNAPI_NEEDS_DLOPEN) && !defined(HAVE_DLOPEN)
 diff --git a/src/thread/pthread/SDL_systhread.c b/src/thread/pthread/SDL_systhread.c
-index 2105673..19249c0 100644
+index 2105673..ed232dc 100644
 --- a/src/thread/pthread/SDL_systhread.c
 +++ b/src/thread/pthread/SDL_systhread.c
+@@ -60,7 +60,7 @@
+ #endif
+ 
+ 
+-#ifndef __NACL__
++#if !defined(__NACL__) && !defined(__XSDK__)
+ /* List of signals to mask in the subthreads */
+ static const int sig_list[] = {
+     SIGHUP, SIGINT, SIGQUIT, SIGPIPE, SIGALRM, SIGTERM, SIGCHLD, SIGWINCH,
 @@ -122,7 +122,7 @@ int SDL_SYS_CreateThread(SDL_Thread *thread)
  
  void SDL_SYS_SetupThread(const char *name)
