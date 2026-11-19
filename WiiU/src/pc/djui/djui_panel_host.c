@@ -23,6 +23,7 @@ static struct DjuiInputbox* sInputboxPort = NULL;
 #ifdef COOPNET
 static struct DjuiRect* sRectPassword = NULL;
 static struct DjuiInputbox* sInputboxPassword = NULL;
+#endif
 
 #ifdef TARGET_WII_U
 #define DJUI_MENU_STATE_BUFSZ 512
@@ -66,10 +67,13 @@ static void djui_menu_state_logf(UNUSED const char* fmt, ...) { }
 static void djui_menu_highlight_logf(UNUSED const char* focus, UNUSED const char* text) { }
 #endif
 
+#ifdef COOPNET
 static void djui_panel_host_hover_network_system(UNUSED struct DjuiBase* base) {
     djui_menu_state_logf("menu_state: page=host_root focus=network_system\n");
     djui_menu_highlight_logf("network_system", DLANG(HOST, NETWORK_SYSTEM));
 }
+
+#endif
 
 static void djui_panel_host_hover_save_slot(UNUSED struct DjuiBase* base) {
     djui_menu_state_logf("menu_state: page=host_root focus=save_slot\n");
@@ -101,6 +105,7 @@ static void djui_panel_host_back(struct DjuiBase* caller) {
     djui_panel_menu_back(caller);
 }
 
+#ifdef COOPNET
 static void djui_panel_host_network_system_change(UNUSED struct DjuiBase* base) {
     djui_menu_state_logf("menu_state: page=host_root action=network_system_change value=%d\n", configNetworkSystem);
     djui_base_set_visible(&sRectPort->base, (configNetworkSystem == NS_SOCKET));

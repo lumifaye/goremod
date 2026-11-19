@@ -533,6 +533,7 @@ void network_receive(u8 localIndex, void* addr, u8* data, u16 dataLength) {
         return;
     }
 
+#ifdef COOPNET
     if (gNetworkSystem == &gNetworkSystemCoopNet) {
         u8 pt = p.buffer[0];
         if (pt == PACKET_NETWORK_PLAYERS
@@ -559,6 +560,8 @@ void network_receive(u8 localIndex, void* addr, u8* data, u16 dataLength) {
                          (unsigned)localIndex, (unsigned)pt, (unsigned)p.dataLength);
         }
     }
+
+#endif
 
     network_remember_debug_packet(p.buffer[0], false);
 

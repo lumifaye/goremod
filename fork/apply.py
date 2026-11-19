@@ -362,7 +362,7 @@ static void fork_embedded_remove_tree(const char* path) {
         if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) { continue; }
         char child[SYS_MAX_PATH] = { 0 };
         if (snprintf(child, SYS_MAX_PATH, "%%s/%%s", path, entry->d_name) >= SYS_MAX_PATH) { continue; }
-#if !defined(_WIN32)
+#if !defined(_WIN32) && !defined(TARGET_XBOX360) // xSDK title storage has no POSIX symlinks
         // (a link is taken away; what it points to is left alone)
         struct stat info = { 0 };
         if (lstat(child, &info) == 0 && S_ISLNK(info.st_mode)) {
