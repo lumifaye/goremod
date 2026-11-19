@@ -131,13 +131,23 @@ static void sample(int slot, float u, float v, float out[4]) {
 static float sat(float a) {
     return fmaxf(0, fminf(1, a));
 }
+extern uint8_t gVertexColor[3]; // gfx_pc: ambient light-map modulation
+
 static bool shade(int x, int y, const float *vary) {
     struct CCFeatures *f = &active->f;
     float reg[SHADER_NOISE + 1][4] = { { 0 } };
+    const float *light_uv = vary + 2 * (f->used_textures[0] + f->used_textures[1]) + 4 * f->opt_fog;
     for (int i = 0; i < 2; i++)
         if (f->used_textures[i]) {
             int id = i ? SHADER_TEXEL1 : SHADER_TEXEL0;
-            sample(i, vary[0], vary[1], reg[id]);
+            const float *uv = (i == 1 && f->opt_light_map) ? light_uv : vary;
+            sample(i, uv[0], uv[1], reg[id]);
+            if (i == 1 && f->opt_light_map) {
+                for (int k = 0; k < 3; k++) {
+                    reg[SHADER_TEXEL0][k] *= gVertexColor[k] / 255.0f;
+                    reg[id][k] *= 1.0f + reg[id][k];
+                }
+            }
             vary += 2;
             for (int k = 0; k < 4; k++)
                 reg[id + 1][k] = reg[id][3];
@@ -168,8 +178,10 @@ static bool shade(int x, int y, const float *vary) {
         }
     }
     float a = f->opt_alpha ? color[3] : 1;
-    if (f->opt_texture_edge && a < 0.3f)
-        return false;
+    if (f->opt_texture_edge && f->opt_alpha) {
+        if (a <= 0.3f) return false;
+        a = 1.0f;
+    }
     uint32_t old = pixels[y][x], result = 255;
     for (int k = 0; k < 3; k++) {
         float c = color[k];

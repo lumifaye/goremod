@@ -114,7 +114,7 @@ static inline u32 level_cmd_normalize_hooked_behavior_arg(const BehaviorScript *
     return behaviorArg;
 }
 
-#ifdef TARGET_WII_U
+#if IS_BIG_ENDIAN && !defined(TARGET_N64)
 static inline s16 level_cmd_read_s16(u32 offset) {
     s16 value = CMD_GET(s16, offset);
     if (gLevelScriptModIndex >= 0) {
@@ -148,7 +148,7 @@ static inline u32 level_cmd_read_u32(u32 offset) {
 }
 #endif
 
-#ifdef TARGET_WII_U
+#if IS_BIG_ENDIAN && !defined(TARGET_N64)
 #define CMD_GET_S16(offset) level_cmd_read_s16(offset)
 #define CMD_GET_U16(offset) level_cmd_read_u16(offset)
 #define CMD_GET_S32(offset) level_cmd_read_s32(offset)

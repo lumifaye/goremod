@@ -19,7 +19,7 @@ extern u8 *gGeoLayoutCommand;
 #define cur_geo_cmd_u8(offset) \
     (gGeoLayoutCommand[CMD_PROCESS_OFFSET(offset)])
 
-#ifdef TARGET_WII_U
+#if IS_BIG_ENDIAN && !defined(TARGET_N64)
 extern u8 gGeoLayoutDynosLittleEndian;
 
 static inline s16 cur_geo_cmd_read_s16(u32 offset) {

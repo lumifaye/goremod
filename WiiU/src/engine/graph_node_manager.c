@@ -4,7 +4,7 @@
 
 #include "graph_node.h"
 
-#ifdef TARGET_WII_U
+#if IS_BIG_ENDIAN && !defined(TARGET_N64)
 extern u8 gGeoLayoutDynosLittleEndian;
 static inline s16 geo_script_read_s16(s16 value) {
     if (gGeoLayoutDynosLittleEndian) {
