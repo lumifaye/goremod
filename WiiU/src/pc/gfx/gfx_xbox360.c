@@ -3,6 +3,7 @@
 #ifdef TARGET_XBOX360
 #include "gfx_rendering_api.h"
 #include "gfx_cc.h"
+#include "gfx_xbox360_window.h"
 #include <xsdk/present.h>
 #include <xsdk/texture.h>
 #include <math.h>
@@ -13,6 +14,7 @@ enum { W = 320, H = 180 };
 static uint32_t pixels[H][W]; /* bytes B,G,R,A on Xenon's big endian CPU */
 static float depth[H][W];
 static int vp[4], sc[4];
+static float scale_x, scale_y;
 static bool test_z, write_z, decal, blend;
 struct ShaderProgram {
     struct CCFeatures f;
@@ -23,24 +25,37 @@ static struct ShaderProgram *programs, *active;
 struct Texture {
     uint8_t *data;
     int w, h;
+    unsigned wrap[2];
+    bool linear;
 };
 static struct Texture *textures;
-static unsigned count, selected[2], tile, wrap[2][2];
-static bool linear[2];
+static unsigned count, selected[2], tile;
 extern void xbox_set_scanout(void (*fn)(uint32_t, uint32_t, uint32_t));
 static void scanout(uint32_t addr, uint32_t w, uint32_t h) {
     XsdkTexture dst;
-    if (w != 1280 || h != 720
+    if (!w || !h || w > XSDK_TEXTURE_MAX_SIZE || h > XSDK_TEXTURE_MAX_SIZE
         || !NT_SUCCESS(xsdk_texture_init(&dst, XSDK_FORMAT_A8R8G8B8, w, h, 1, true)))
         return;
     xsdk_texture_attach(&dst, xsdk_present_pixels(addr));
-    static uint32_t rows[4][1280];
-    for (int y = 0; y < H; y++) {
-        for (int x = 0; x < 1280; x++)
-            rows[0][x] = pixels[y][x / 4];
-        for (int r = 1; r < 4; r++)
-            memcpy(rows[r], rows[0], sizeof rows[0]);
-        xsdk_texture_upload_rows(&dst, 0, y * 4, 4, rows, sizeof rows[0]);
+    if (w == 1280 && h == 720) {
+        static uint32_t rows[4][1280];
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < 1280; x++) rows[0][x] = pixels[y][x / 4];
+            for (int r = 1; r < 4; r++) memcpy(rows[r], rows[0], sizeof rows[0]);
+            xsdk_texture_upload_rows(&dst, 0, y * 4, 4, rows, sizeof rows[0]);
+        }
+    } else {
+        // The kernel display mode may be 640x480 on an interlaced output.
+        static uint32_t row[XSDK_TEXTURE_MAX_SIZE];
+        unsigned prev_y = H;
+        for (unsigned y = 0; y < h; ++y) {
+            unsigned src_y = y * H / h;
+            if (src_y != prev_y) {
+                for (unsigned x = 0; x < w; ++x) row[x] = pixels[src_y][x * W / w];
+                prev_y = src_y;
+            }
+            xsdk_texture_upload_rows(&dst, 0, y, 1, row, w * sizeof(*row));
+        }
     }
 }
 static bool zero_one(void) {
@@ -93,12 +108,14 @@ static void upload(const uint8_t *buf, int w, int h) {
     if (!p)
         abort();
     memcpy(p, buf, len);
-    *t = (struct Texture) { p, w, h };
+    t->data = p; t->w = w; t->h = h;
 }
 static void sampler(int t, bool l, uint32_t s, uint32_t v) {
-    linear[t] = l;
-    wrap[t][0] = s;
-    wrap[t][1] = v;
+    if (selected[t] >= count) return;
+    struct Texture *tex = &textures[selected[t]];
+    tex->linear = l;
+    tex->wrap[0] = s;
+    tex->wrap[1] = v;
 }
 static int address(int i, int n, unsigned mode) {
     if (mode & 2)
@@ -115,14 +132,14 @@ static void sample(int slot, float u, float v, float out[4]) {
     struct Texture *t = textures + selected[slot];
     if (!t->data)
         return;
-    u = u * t->w - (linear[slot] ? 0.5f : 0);
-    v = v * t->h - (linear[slot] ? 0.5f : 0);
+    u = u * t->w - (t->linear ? 0.5f : 0);
+    v = v * t->h - (t->linear ? 0.5f : 0);
     int i = floorf(u), j = floorf(v);
     float fx = u - i, fy = v - j;
-    int steps = linear[slot] ? 2 : 1;
+    int steps = t->linear ? 2 : 1;
     for (int y = 0; y < steps; y++)
         for (int x = 0; x < steps; x++) {
-            int ix = address(i + x, t->w, wrap[slot][0]), iy = address(j + y, t->h, wrap[slot][1]);
+            int ix = address(i + x, t->w, t->wrap[0]), iy = address(j + y, t->h, t->wrap[1]);
             float weight = steps == 1 ? 1 : (x ? fx : 1 - fx) * (y ? fy : 1 - fy);
             for (int k = 0; k < 4; k++)
                 out[k] += t->data[4 * (iy * t->w + ix) + k] * (weight / 255.f);
@@ -203,16 +220,16 @@ static void rasterize(const float *buf, size_t stride) {
             return;
         q[i] = 1 / v[3];
         z[i] = v[2] * q[i];
-        x[i] = (vp[0] + (1 + v[0] * q[i]) * vp[2] * .5f) * .25f;
-        y[i] = H - (vp[1] + (1 + v[1] * q[i]) * vp[3] * .5f) * .25f;
+        x[i] = (vp[0] + (1 + v[0] * q[i]) * vp[2] * .5f) * scale_x;
+        y[i] = H - (vp[1] + (1 + v[1] * q[i]) * vp[3] * .5f) * scale_y;
     }
     float area = (x[1] - x[0]) * (y[2] - y[0]) - (y[1] - y[0]) * (x[2] - x[0]);
     if (!area)
         return;
-    int left = fmaxf(fmaxf(0, sc[0] * .25f), floorf(fminf(x[0], fminf(x[1], x[2]))));
-    int right = fminf(fminf(W, (sc[0] + sc[2]) * .25f), ceilf(fmaxf(x[0], fmaxf(x[1], x[2]))));
-    int top = fmaxf(fmaxf(0, H - (sc[1] + sc[3]) * .25f), floorf(fminf(y[0], fminf(y[1], y[2]))));
-    int bottom = fminf(fminf(H, H - sc[1] * .25f), ceilf(fmaxf(y[0], fmaxf(y[1], y[2]))));
+    int left = fmaxf(fmaxf(0, sc[0] * scale_x), floorf(fminf(x[0], fminf(x[1], x[2]))));
+    int right = fminf(fminf(W, (sc[0] + sc[2]) * scale_x), ceilf(fmaxf(x[0], fmaxf(x[1], x[2]))));
+    int top = fmaxf(fmaxf(0, H - (sc[1] + sc[3]) * scale_y), floorf(fminf(y[0], fminf(y[1], y[2]))));
+    int bottom = fminf(fminf(H, H - sc[1] * scale_y), ceilf(fmaxf(y[0], fmaxf(y[1], y[2]))));
     for (int j = top; j < bottom; j++)
         for (int i = left; i < right; i++) {
             float dx = i + .5f - x[0], dy = j + .5f - y[0];
@@ -229,7 +246,7 @@ static void rasterize(const float *buf, size_t stride) {
             float norm = 1 / (a + b + c), vary[44];
             for (size_t k = 4; k < stride; k++)
                 vary[k - 4] = (a * buf[k] + b * buf[stride + k] + c * buf[stride * 2 + k]) * norm;
-            if (shade(i, j, vary) && write_z)
+            if (shade(i, j, vary) && test_z && write_z)
                 depth[j][i] = d;
         }
 }
@@ -278,9 +295,17 @@ static void viewport(int x, int y, int w, int h) {
 static void scissor(int x, int y, int w, int h) {
     memcpy(sc, (int[]) { x, y, w, h }, sizeof sc);
 }
+static void resize(void) {
+    uint32_t w, h;
+    gfx_xbox360_window.get_dimensions(&w, &h);
+    if (!w || !h) return;
+    scale_x = (float)W / w;
+    scale_y = (float)H / h;
+    viewport(0, 0, w, h);
+    scissor(0, 0, w, h);
+}
 static void init(void) {
-    viewport(0, 0, 1280, 720);
-    scissor(0, 0, 1280, 720);
+    resize();
     xbox_set_scanout(scanout);
 }
 static void start(void) {
@@ -321,6 +346,6 @@ static const char *name(void) {
 struct GfxRenderingAPI gfx_xbox360_api = { zero_one,  unload,    load,       create,   lookup,
                                            info,      alloc_tex, select_tex, upload,   sampler,
                                            set_test,  set_write, set_decal,  viewport, scissor,
-                                           set_blend, draw,      init,       noop,     start,
+                                           set_blend, draw,      init,       resize,   start,
                                            noop,      noop,      name,       shutdown };
 #endif

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -22,6 +23,10 @@ bool xsdk_system_ui_open(void){return ui_open;}
 void xsdk_log_write(const char *format,...){(void)format;}
 static void iter(void){++steps;}
 int main(void){
+ char text[WAPI_CLIPBOARD_BUFSIZ+7]; memset(text, 'x', sizeof(text)-1); text[sizeof(text)-1]=0;
+ gfx_xbox360_window.set_clipboard_text(text); assert(strlen(gfx_xbox360_window.get_clipboard_text())==WAPI_CLIPBOARD_BUFSIZ-1);
+ gfx_xbox360_window.set_clipboard_text("paste"); gfx_xbox360_window.set_clipboard_text(gfx_xbox360_window.get_clipboard_text()+1);
+ assert(!strcmp(gfx_xbox360_window.get_clipboard_text(),"aste")); gfx_xbox360_window.set_clipboard_text(NULL); assert(!*gfx_xbox360_window.get_clipboard_text());
  uint32_t w=0,h=0;
  gfx_xbox360_window.init("x");assert(gpu_opens==1&&present_opens==1&&begins==1&&resolves==1&&ends==1);
  gfx_xbox360_window.get_dimensions(&w,&h);assert(w==1280&&h==720&&gfx_xbox360_window.has_focus());

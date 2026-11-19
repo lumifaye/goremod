@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include <string.h>
 #include <xsdk/gpu.h>
 #include <xsdk/present.h>
 #include <xsdk/xam.h>
@@ -66,7 +67,11 @@ static void xbox_window_shutdown(void) {
 }
 static void xbox_noop(void) {}
 static char *xbox_clipboard_get(void) { return clipboard; }
-static void xbox_clipboard_set(const char *text) { (void)text; }
+static void xbox_clipboard_set(const char *text) {
+    size_t n = text ? strnlen(text, sizeof clipboard - 1) : 0;
+    if (n) memmove(clipboard, text, n);
+    clipboard[n] = 0;
+}
 static void xbox_cursor(bool visible) { (void)visible; }
 static void xbox_delay(unsigned int ms) {
     struct timespec t={(time_t)(ms/1000u),(long)(ms%1000u)*1000000L};
