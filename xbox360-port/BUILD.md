@@ -1,6 +1,6 @@
 # Xbox 360 game target (bring-up)
 
-Use the Wii U engine **with** the Realism64 fork applied. The following is the game build path under development, not the standalone diagnostic. It has not produced a verified `default.xex` yet.
+Use the Wii U engine **with** the Realism64 fork applied. The following is the game build path under development, not the standalone diagnostic. Actions has produced a game `default.xex`; gameplay is not yet verified.
 
 From the repository root on Linux, choose a fresh staging directory outside the checkout:
 
@@ -19,7 +19,7 @@ The target links the engine ELF with xSDK's title startup and packages it with `
 
 ### Reproducing the Actions build
 
-`.github/workflows/xbox360-game.yml` checks out the exact revisions of xSDK, zlib and SDL2. After installing the pinned compiler and running `make -C "$XSDK_ROOT" build/libxsdk.a`, use those zlib/SDL checkouts to build the target libraries:
+`.github/workflows/xbox360-game.yml` checks out the exact revisions of xSDK, zlib and SDL2. After installing the pinned compiler, apply `git -C "$XSDK_ROOT" apply "$PWD/xbox360-port/xsdk-vdswap.patch"` once and run `make -C "$XSDK_ROOT" build/libxsdk.a`. Then use those zlib/SDL checkouts to build the target libraries:
 
 ```sh
 ports=$(mktemp -d)
