@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include <unistd.h>
 #define DISABLE_MODULE_LOG 1
 #include "pc/gfx/gfx_pc.h"
@@ -190,7 +191,16 @@ void mod_cache_add_internal(u8* dataHash, u64 lastLoaded, char* inPath) {
     struct ModCacheEntry *node = malloc(sizeof(struct ModCacheEntry));
     sModCacheEntries[sModCacheLength] = node;
     memcpy(node->dataHash, dataHash, sizeof(u8) * 16);
-    if (lastLoaded == 0) { lastLoaded = clock(); }
+    if (lastLoaded == 0) {
+#ifdef TARGET_XBOX360
+        struct timespec ts;
+        if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+            lastLoaded = (u64)ts.tv_sec * 1000000000u + ts.tv_nsec;
+        }
+#else
+        lastLoaded = clock();
+#endif
+    }
     node->lastLoaded = lastLoaded;
     node->path = path;
     node->arrayIndex = sModCacheLength;

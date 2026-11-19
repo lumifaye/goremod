@@ -256,7 +256,13 @@ typedef unsigned int IdxT;
 ** is to copy them to an array of a known type and use the array values.
 */
 static unsigned int l_randomizePivot (void) {
+#ifdef __XSDK__
+  struct timespec ts = {0, 0};
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  unsigned int c = (unsigned int)ts.tv_nsec;
+#else
   clock_t c = clock();
+#endif
   time_t t = time(NULL);
   unsigned int buff[sof(c) + sof(t)];
   unsigned int i, rnd = 0;

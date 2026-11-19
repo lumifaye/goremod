@@ -140,6 +140,15 @@ static time_t l_checktime (lua_State *L, int arg) {
 
 static int os_execute (lua_State *L) {
   const char *cmd = luaL_optstring(L, 1, NULL);
+#ifdef __XSDK__
+  /* A console title has no command shell or child processes. */
+  if (cmd == NULL) {
+    lua_pushboolean(L, 0);
+    return 1;
+  }
+  errno = ENOSYS;
+  return luaL_fileresult(L, 0, NULL);
+#else
   int stat = system(cmd);
   if (cmd != NULL)
     return luaL_execresult(L, stat);
@@ -147,6 +156,7 @@ static int os_execute (lua_State *L) {
     lua_pushboolean(L, stat);  /* true if there is a shell */
     return 1;
   }
+#endif
 }
 
 
@@ -181,7 +191,14 @@ static int os_getenv (lua_State *L) {
 
 
 static int os_clock (lua_State *L) {
+#ifdef __XSDK__
+  /* xSDK provides monotonic elapsed time but not process CPU accounting. */
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return luaL_error(L, "clock unavailable");
+  lua_pushnumber(L, (lua_Number)ts.tv_sec + (lua_Number)ts.tv_nsec / 1e9);
+#else
   lua_pushnumber(L, ((lua_Number)clock())/(lua_Number)CLOCKS_PER_SEC);
+#endif
   return 1;
 }
 
