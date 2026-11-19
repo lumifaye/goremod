@@ -38,7 +38,7 @@ jobs:
           key: xsdk-ubuntu24-v1-${{ env.XSDK_REF }}
       - name: Build patched PowerPC C and C++ toolchain
         if: steps.tools.outputs.cache-hit != 'true'
-        run: JOBS=3 bash "$XSDK_ROOT/tools/toolchain/build.sh"
+        run: JOBS=3 bash xbox360-port/build-toolchain-ci.sh
       - uses: actions/cache/save@v4
         if: steps.tools.outputs.cache-hit != 'true'
         with:
