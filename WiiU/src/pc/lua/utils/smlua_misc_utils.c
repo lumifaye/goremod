@@ -678,7 +678,11 @@ void reset_window_title(void) {
 ///
 
 const char* get_os_name(void) {
-#if defined(_WIN32)
+#if defined(TARGET_XBOX360)
+    return "Xbox 360";
+#elif defined(TARGET_WII_U)
+    return "Wii U";
+#elif defined(_WIN32)
     return "Windows";
 #elif __APPLE__ || __MACH__
     return "Mac OSX"; // should be macOS

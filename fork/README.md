@@ -28,6 +28,20 @@ linux needs SDL2, OpenGL, libcurl and zlib. on mac you might need to allow the u
 
 windows builds use the original games' saves and settings folders. android installs separately. the pc vr zip doesn't include offline chat dictation
 
+## platform field kits
+
+These are local features: they do not change other players or require matching hardware in a lobby.
+
+| Build | Feature | How to use it |
+| --- | --- | --- |
+| Desktop (Windows, Linux, macOS) | Practice splits in game time | `/split start`, `/split` for each checkpoint, then `/split stop`. |
+| VR (PC VR and Quest) | Hands-together pulse check | Hold both tracked hands together for half a second to see health. Separate them before checking again. |
+| Android (flat) | Dive warning | A local popup warns once when swimming deep with less than four health wedges. |
+| Wii U | Co-op spotter | `/spotter` reports the closest teammate in the same course, act and area, with distance in game units. |
+| Xbox 360 | Low-health heartbeat | Below four health wedges the controller pulses, faster on the last wedge. Requires rumble enabled. |
+
+Use `/fieldkit` to toggle the automatic VR, Android or Xbox feature for the session. Desktop and Wii U tools only run when requested.
+
 ## building
 
 run `build-fork.yml` from Actions or put `[build]` in a commit message to build everything, including wii u. for individual builds use `[build pc]`, `[build linux]`, `[build macos]`, `[build pcvr]`, `[build android]`, `[build quest]` or `[build wiiu]` (`[wiiu]` works too). use `[skip ci]` to skip workflow runs on a push
