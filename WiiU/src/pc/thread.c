@@ -38,7 +38,12 @@ int init_thread(struct ThreadHandle *handle, void *(*entry)(void *), void *arg, 
     assert(err == 0);
 
     if (sp != NULL && sp_size > 0) {
+#ifdef TARGET_XBOX360
+        // xSDK allocates the stack itself, but honors the requested size.
+        err = pthread_attr_setstacksize(&thattr, sp_size);
+#else
         err = pthread_attr_setstack(&thattr, sp, sp_size);
+#endif
         assert(err == 0);
     }
 

@@ -6,7 +6,7 @@
 
 static SOCKET sCurSocket = INVALID_SOCKET;
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 typedef struct sockaddr_in SocketAddress;
 #define SOCKET_ADDR_FAMILY AF_INET
 #define SOCKET_ADDR_FAMILY_FIELD sin_family
@@ -40,7 +40,7 @@ static void resolve_domain(SocketAddress *addr) {
     // set hints
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
     hints.ai_family = AF_INET;
 #endif
 
@@ -65,7 +65,7 @@ static void resolve_domain(SocketAddress *addr) {
         // Iterate through results
         for (i = result; i != NULL; i = i->ai_next) {
             char str[SOCKET_ADDR_STR_LEN];
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
             // IPv6 address:
             if (i->ai_addr->sa_family == AF_INET6) {
                 struct sockaddr_in6 *p = (struct sockaddr_in6 *)i->ai_addr;

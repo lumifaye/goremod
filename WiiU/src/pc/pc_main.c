@@ -127,7 +127,7 @@ struct GfxRenderingAPI* gRenderApi = &gfx_dummy_renderer_api;
 extern void gfx_run(Gfx *commands);
 extern void thread5_game_loop(void *arg);
 extern void create_next_audio_buffer(s16 *samples, u32 num_samples);
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 // (smlua_audio_utils.c) what the mods are playing, added to the game's sound
 extern void smlua_audio_custom_mix(s16 *samples, u32 frames);
 #endif
@@ -460,7 +460,7 @@ inline static void buffer_audio(void) {
         for (u32 i = 0; i < mixedSamples; i++) {
             sAudioBuffer[i] = (s16)((f32)sAudioBuffer[i] * gMasterVolume);
         }
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
         // Sounds and music from mods (their volume already has the master volume in it).
         smlua_audio_custom_mix(sAudioBuffer, audioBatches * numAudioSamples);
 #endif
@@ -750,8 +750,8 @@ int main(int argc, char *argv[]) {
     // start the thread for setting up the game
     bool threadSuccess = false;
     bool usedLoadingScreen = false;
-#ifdef TARGET_WII_U
-    // Keep Wii U boot on the main thread for now. The loading-screen thread
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    // Keep console boot on the main thread for now. The loading-screen thread
     // path is desktop-oriented and has been leaving the port presenting a
     // frame while game init silently stalls in the background.
     const bool allowAsyncLoadingThread = false;
@@ -793,7 +793,10 @@ int main(int argc, char *argv[]) {
     // Initialize the audio thread if possible. Falling back to frame-threaded
     // audio is functional but prone to underruns when rendering stalls.
     if (gAudioApi != &audio_null) {
-#ifdef TARGET_WII_U
+#ifdef TARGET_XBOX360
+        // The no-threading mod-audio engine is also manipulated by Lua.
+        gAudioThread.state = INVALID;
+#elif defined(TARGET_WII_U)
         // Keep Wii U on frame-threaded audio for now. The pthread shim/newlib
         // interaction can destabilize large Lua allocations during host/mod init.
         gAudioThread.state = INVALID;

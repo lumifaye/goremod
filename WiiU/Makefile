@@ -41,6 +41,7 @@ ifeq ($(TARGET_XBOX360),1)
     $(error Set XSDK_ROOT to the xSDK source directory)
   endif
   CROSS := powerpc-xsdk-elf-
+  XBOX_C_STD := -std=gnu17
   TARGET_BITS := 32
   COOPNET := 0
 endif
@@ -1549,7 +1550,7 @@ $(BUILD_DIR)/%.aifc: $(BUILD_DIR)/%.table %.aiff
 
 $(ENDIAN_BITWIDTH): $(TOOLS_DIR)/determine-endian-bitwidth.c
 	@$(PRINT) "$(GREEN)Generating endian-bitwidth $(NO_COL)\n"
-	$(V)$(CC) $(PROF_FLAGS) -c $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
+	$(V)$(CC) $(XBOX_C_STD) $(PROF_FLAGS) -c $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
 	$(V)grep -o 'msgbegin --endian .* --bitwidth .* msgend' $@.dummy1 > $@.dummy2
 	$(V)head -n1 <$@.dummy2 | cut -d' ' -f2-5 > $@
 	@$(RM) $@.dummy1
@@ -1786,13 +1787,13 @@ $(BUILD_DIR)/%.o: %.cpp
 $(BUILD_DIR)/%.o: %.c
 	$(call print,Compiling:,$<,$@)
 	$(V)mkdir -p $(dir $@)
-	$(V)$(CC_CHECK) $(PROF_FLAGS) $(CC_CHECK_CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
-	$(V)$(CC) $(PROF_FLAGS) -c $(CFLAGS) -o $@ $<
+	$(V)$(CC_CHECK) $(XBOX_C_STD) $(PROF_FLAGS) $(CC_CHECK_CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
+	$(V)$(CC) $(XBOX_C_STD) $(PROF_FLAGS) -c $(CFLAGS) -o $@ $<
 $(BUILD_DIR)/%.o: $(BUILD_DIR)/%.c
 	$(call print,Compiling:,$<,$@)
 	$(V)mkdir -p $(dir $@)
-	$(V)$(CC_CHECK) $(PROF_FLAGS) $(CC_CHECK_CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
-	$(V)$(CC) $(PROF_FLAGS) -c $(CFLAGS) -o $@ $<
+	$(V)$(CC_CHECK) $(XBOX_C_STD) $(PROF_FLAGS) $(CC_CHECK_CFLAGS) -MMD -MP -MT $@ -MF $(BUILD_DIR)/$*.d $<
+	$(V)$(CC) $(XBOX_C_STD) $(PROF_FLAGS) -c $(CFLAGS) -o $@ $<
 
 ifeq ($(TARGET_WII_U),1)
   # Lua core relies on strict IEEE float semantics for hash/table internals.

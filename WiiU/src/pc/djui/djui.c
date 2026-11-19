@@ -245,8 +245,8 @@ void djui_render(void) {
 
     // Be careful! Djui interactables update at 30hz to avoid display list corruption.
     if (!sDjuiRendered60fps) {
-#ifdef TARGET_WII_U
-        djui_inputbox_wiiu_keyboard_update();
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+        djui_inputbox_console_keyboard_update();
 #endif
         djui_interactable_update();
     }

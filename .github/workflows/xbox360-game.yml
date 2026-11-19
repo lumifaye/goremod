@@ -59,14 +59,7 @@ jobs:
           path: .ci/sdl2
           persist-credentials: false
       - name: Cross-compile target dependencies
-        run: |
-          prefix="$RUNNER_TEMP/ports"
-          (cd .ci/zlib && CHOST=powerpc-xsdk-elf ./configure --static --prefix="$prefix" && make -j3 libz.a && make install-libs)
-          cmake -S .ci/sdl2 -B "$RUNNER_TEMP/sdl-build" -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$XSDK_ROOT/cmake/xsdk.cmake" -DCMAKE_INSTALL_PREFIX="$prefix" \
-            -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST=OFF -DSDL_TESTS=OFF -DSDL_ATOMIC=ON \
-            -DSDL_HIDAPI=OFF -DSDL_DYNAPI=OFF -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF -DSDL_VULKAN=OFF
-          cmake --build "$RUNNER_TEMP/sdl-build" --target install -j3
+        run: xbox360-port/build-deps.sh .ci/sdl2 .ci/zlib "$RUNNER_TEMP/deps-build" "$RUNNER_TEMP/ports"
       - name: Embed Realism64 and build game title
         shell: bash
         run: |

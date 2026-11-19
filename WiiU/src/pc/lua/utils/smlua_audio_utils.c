@@ -189,7 +189,7 @@ static ma_engine sModAudioEngine;
 static struct DynamicPool *sModAudioPool;
 static bool sModAudioShuttingDown = false;
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 // Wii U: miniaudio has no way of its own to the console's sound. Its engine is made without a sound
 // device, at the rate and shape of the game's own sound (32 kHz, stereo), and the game asks it for
 // what the mods are playing each time it has made its own sound: smlua_audio_custom_mix(), called
@@ -203,7 +203,7 @@ static bool sModAudioEngineReady = false;
 static void smlua_audio_custom_init(void) {
     sModAudioPool = dynamic_pool_init();
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
     ma_engine_config config = ma_engine_config_init();
     config.noDevice = MA_TRUE;
     config.channels = WIIU_MOD_AUDIO_CHANNELS;
@@ -218,7 +218,7 @@ static void smlua_audio_custom_init(void) {
     }
 }
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 // Adds what the mods are playing to `frames` frames of the game's sound (16 bit, stereo, 32 kHz).
 void smlua_audio_custom_mix(s16* samples, u32 frames) {
     static float sMixed[WIIU_MOD_AUDIO_BLOCK * WIIU_MOD_AUDIO_CHANNELS];
@@ -891,7 +891,7 @@ void smlua_audio_custom_deinit(void) {
         sModAudioShuttingDown = true;
         pthread_mutex_unlock(&sSampleCopyMutex);
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
         if (sModAudioEngineReady) { ma_engine_uninit(&sModAudioEngine); }
         sModAudioEngineReady = false;
 #else

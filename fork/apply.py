@@ -2664,6 +2664,11 @@ def voice_chat_flat(t, base):
                   "        const uint8_t *queue_buf = audio_prepare_wiiu_pcm(fork_voice_mix(buf, len), len); // [gore fork]\n")
     t.after(f, '#include "audio_api.h"\n', '#include "pc/network/fork_voice.h" // [gore fork]\n')
 
+    xbox = "src/pc/audio/audio_xbox360.c"
+    if t.exists(xbox):
+        t.after(xbox, '#include "audio_api.h"\n', '#include "pc/network/fork_voice.h"\n')
+        t.after(xbox, "    if (!open || !buf) return;\n", "    buf = fork_voice_mix(buf, len);\n")
+
     f = "src/pc/configfile.c"
     t.after(f, "bool         configMuteFocusLoss                  = false;\n",
             "// [gore fork] voice chat: hear the others; the microphone is off until the player turns it on\n"

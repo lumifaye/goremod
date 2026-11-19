@@ -10,7 +10,9 @@
 #include "pc/controller/controller_keyboard.h"
 #ifdef TARGET_WII_U
 #include "pc/controller/controller_wiiu.h"
-#include "pc/wiiu_keyboard.h"
+#endif
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+#include "pc/console_keyboard.h"
 #endif
 #include "pc/utils/misc.h"
 #include "pc/network/network.h"
@@ -420,8 +422,8 @@ void djui_interactable_update_pad(void) {
 }
 
 void djui_interactable_update(void) {
-#ifdef TARGET_WII_U
-    if (wiiu_keyboard_active()) {
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    if (console_keyboard_active()) {
         gInteractableMouseDown = NULL;
         gDjuiCursorDownOn = NULL;
         sLastMouseButtons = 0;

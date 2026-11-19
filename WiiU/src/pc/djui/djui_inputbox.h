@@ -36,6 +36,6 @@ void djui_inputbox_on_text_editing(struct DjuiBase *base, char* text, int cursor
 
 struct DjuiInputbox* djui_inputbox_create(struct DjuiBase* parent, u16 bufferSize);
 
-#ifdef TARGET_WII_U
-void djui_inputbox_wiiu_keyboard_update(void);
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+void djui_inputbox_console_keyboard_update(void);
 #endif

@@ -7,9 +7,9 @@
 #include "pc/pc_main.h"
 #include "game/segment2.h"
 #include "pc/controller/controller_keyboard.h"
-#ifdef TARGET_WII_U
-#include "pc/wiiu_keyboard.h"
-static struct DjuiBase *sWiiuKeyboardFocus = NULL;
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+#include "pc/console_keyboard.h"
+static struct DjuiBase *sConsoleKeyboardFocus = NULL;
 #endif
 
 #define DJUI_INPUTBOX_YOFF (-3)
@@ -346,41 +346,46 @@ void djui_inputbox_on_focus_begin(UNUSED struct DjuiBase* base) {
     gDjuiInputHeldControl = 0;
     gDjuiInputHeldAlt     = 0;
     gWindowApi->start_text_input();
-#ifdef TARGET_WII_U
-    if (sWiiuKeyboardFocus != base || !wiiu_keyboard_active()) {
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    if (sConsoleKeyboardFocus != base || !console_keyboard_active()) {
         struct DjuiInputbox *inputbox = (struct DjuiInputbox *)base;
-        sWiiuKeyboardFocus = wiiu_keyboard_open(inputbox->buffer, inputbox->bufferSize, inputbox->passwordChar[0] != 0) ? base : NULL;
+        sConsoleKeyboardFocus = console_keyboard_open(inputbox->buffer, inputbox->bufferSize, inputbox->passwordChar[0] != 0) ? base : NULL;
     }
 #endif
 }
 
 void djui_inputbox_on_focus_end(UNUSED struct DjuiBase* base) {
     gWindowApi->stop_text_input();
-#ifdef TARGET_WII_U
-    if (sWiiuKeyboardFocus == base) {
-        sWiiuKeyboardFocus = NULL;
-        wiiu_keyboard_cancel();
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    if (sConsoleKeyboardFocus == base) {
+        sConsoleKeyboardFocus = NULL;
+        console_keyboard_cancel();
     }
 #endif
 }
 
-#ifdef TARGET_WII_U
-void djui_inputbox_wiiu_keyboard_update(void) {
-    if (sWiiuKeyboardFocus != gInteractableFocus) {
-        sWiiuKeyboardFocus = NULL;
-        wiiu_keyboard_cancel();
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+void djui_inputbox_console_keyboard_update(void) {
+    if (sConsoleKeyboardFocus != gInteractableFocus) {
+        sConsoleKeyboardFocus = NULL;
+        console_keyboard_cancel();
         return;
     }
-    if (!sWiiuKeyboardFocus) return;
-    struct DjuiInputbox *inputbox = (struct DjuiInputbox *)sWiiuKeyboardFocus;
+    if (!sConsoleKeyboardFocus) {
+#ifdef TARGET_XBOX360
+        console_keyboard_cancel(); // reap an abandoned asynchronous XAM request
+#endif
+        return;
+    }
+    struct DjuiInputbox *inputbox = (struct DjuiInputbox *)sConsoleKeyboardFocus;
     char *text = malloc(inputbox->bufferSize);
     if (!text) return;
-    int result = wiiu_keyboard_take_result(text, inputbox->bufferSize);
+    int result = console_keyboard_take_result(text, inputbox->bufferSize);
     if (result > 0) {
         djui_inputbox_select_all(inputbox);
         djui_interactable_on_key_down(SCANCODE_BACKSPACE);
-        if (gInteractableFocus == sWiiuKeyboardFocus && text[0]) djui_interactable_on_text_input(text);
-        if (gInteractableFocus == sWiiuKeyboardFocus) djui_interactable_on_key_down(SCANCODE_ENTER);
+        if (gInteractableFocus == sConsoleKeyboardFocus && text[0]) djui_interactable_on_text_input(text);
+        if (gInteractableFocus == sConsoleKeyboardFocus) djui_interactable_on_key_down(SCANCODE_ENTER);
     } else if (result < 0) {
         djui_interactable_on_key_down(SCANCODE_ESCAPE);
     }

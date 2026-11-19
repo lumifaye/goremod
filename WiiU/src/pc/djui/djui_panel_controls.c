@@ -37,13 +37,18 @@ void djui_panel_controls_create(struct DjuiBase* caller) {
         djui_button_create(body, DLANG(CONTROLS, EXTRA_BINDS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_controls_extra_create);
         djui_button_create(body, DLANG(CONTROLS, ANALOG_STICK_OPTIONS), DJUI_BUTTON_STYLE_NORMAL, djui_panel_controls_analog_stick_options_create);
         djui_checkbox_create(body, DLANG(CONTROLS, BACKGROUND_GAMEPAD), &configBackgroundGamepad, NULL);
-#ifndef HANDHELD
+#if !defined(HANDHELD) && !defined(TARGET_XBOX360)
         djui_checkbox_create(body, DLANG(CONTROLS, DISABLE_GAMEPADS), &configDisableGamepads, NULL);
 #endif
         djui_checkbox_create(body, DLANG(MISC, USE_STANDARD_KEY_BINDINGS_CHAT), &configUseStandardKeyBindingsChat, NULL);
 
         djui_checkbox_create(body, DLANG(CONTROLS, EXTENDED_REPORTS), &configExtendedReports, NULL);
 
+#ifdef TARGET_XBOX360
+        // XAM user indices are fixed slots, including disconnected slots.
+        char *slots[] = { "Controller 1", "Controller 2", "Controller 3", "Controller 4" };
+        djui_selectionbox_create(body, DLANG(CONTROLS, GAMEPAD), slots, 4, &configGamepadNumber, NULL);
+#else
         int numJoys = SDL_NumJoysticks();
         if (numJoys == 0) { numJoys = 1; }
 
@@ -92,6 +97,7 @@ void djui_panel_controls_create(struct DjuiBase* caller) {
         }
 
         free(gamepadChoices);
+#endif
 
         djui_slider_create(body, DLANG(CONTROLS, DEADZONE), &configStickDeadzone, 0, 100, djui_panel_controls_value_change);
         djui_slider_create(body, DLANG(CONTROLS, RUMBLE_STRENGTH), &configRumbleStrength, 0, 100, djui_panel_controls_value_change);

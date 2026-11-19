@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 #include <filesystem>
@@ -103,8 +104,8 @@ void legacy_folder_handler(void) {
 
 bool main_rom_handler(void) {
     if (scan_path_for_rom(fs_get_write_path(""))) { return true; }
-#ifdef TARGET_WII_U
-    // Wii U users cannot drag-and-drop, so search common SD/content folders.
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    // Console users cannot drag-and-drop, so search common SD/content folders.
     std::string writePath = fs_get_write_path("");
     if (!writePath.empty()) {
         std::string romsPath = writePath + "roms";
@@ -118,6 +119,8 @@ bool main_rom_handler(void) {
         if (scan_path_for_rom(resourceRomsPath.c_str())) { return true; }
     }
 
+#endif
+#ifdef TARGET_WII_U
     if (scan_path_for_rom("/vol/external01/wiiu/apps/sm64coopdx")) { return true; }
     if (scan_path_for_rom("/vol/external01/wiiu/apps/sm64coopdx/roms")) { return true; }
 #endif

@@ -2,7 +2,7 @@
 #include <windows.h>
 #else
 #include <unistd.h>
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
 #include <sys/wait.h>
 #endif
 #endif
@@ -695,7 +695,7 @@ static char *get_update_path(void) {
 }
 
 bool can_update_game(void) {
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
     // there is no updater program for the Wii U
     return false;
 #else
@@ -705,7 +705,7 @@ bool can_update_game(void) {
 }
 
 void update_game(void) {
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
     const char *updateExecFilePath = get_update_path();
 
 #ifdef _WIN32
