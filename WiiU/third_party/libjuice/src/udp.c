@@ -127,8 +127,14 @@ static socket_t create_socket_for_addrinfo(const udp_socket_config_t *config,
 	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (const char *)&buffer_size, sizeof(buffer_size));
 #endif
 
+#ifdef __XSDK__
+	// xSDK's socket layer implements F_GETFL/F_SETFL, not ioctl(FIONBIO).
+	int flags = fcntl(sock, F_GETFL, 0);
+	if (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+#else
 	ctl_t nbio = 1;
 	if (ioctlsocket(sock, FIONBIO, &nbio)) {
+#endif
 		JLOG_ERROR("Setting non-blocking mode on UDP socket failed, errno=%d", sockerrno);
 		goto error;
 	}
@@ -240,9 +246,14 @@ socket_t udp_create_socket(const udp_socket_config_t *config) {
 		return INVALID_SOCKET;
 	}
 
-	const int families[2] = {AF_INET6, AF_INET}; // Prefer IPv6
-	const char *names[2] = {"IPv6", "IPv4"};
-	for (int i = 0; i < 2; ++i) {
+#ifdef __XSDK__
+	const int families[] = {AF_INET};
+	const char *names[] = {"IPv4"};
+#else
+	const int families[] = {AF_INET6, AF_INET}; // Prefer IPv6
+	const char *names[] = {"IPv6", "IPv4"};
+#endif
+	for (size_t i = 0; i < sizeof(families) / sizeof(families[0]); ++i) {
 		const struct addrinfo *ai = find_family(ai_list, families[i]);
 		if (!ai)
 			continue;

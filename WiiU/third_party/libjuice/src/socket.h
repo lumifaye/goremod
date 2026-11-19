@@ -69,10 +69,16 @@ typedef ULONG nfds_t;
 #endif
 #include <netdb.h>
 #include <netinet/in.h>
+#ifndef __XSDK__
 #include <netinet/tcp.h>
+#endif
 #include <poll.h>
+#ifndef __XSDK__
 #include <sys/ioctl.h>
+#endif
+#ifndef __XSDK__
 #include <sys/select.h>
+#endif
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -85,6 +91,9 @@ typedef ULONG nfds_t;
 
 #if defined(__WIIU__)
 #include "wiiu_compat.h" // Wii U: IPv4 only, no interface list, no pipe
+#elif defined(__XSDK__)
+#include "xbox360_compat.h"
+#include <ifaddrs.h>
 #elif defined(__ANDROID__)
 #define NO_IFADDRS
 #else

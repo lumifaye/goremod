@@ -1,13 +1,18 @@
+#include <stddef.h>
 #include "lib/src/libultra_internal.h"
 #include "lib/src/osContInternal.h"
 #include "macros.h"
 
 #include "../configfile.h"
 
+#if defined(TARGET_XBOX360)
+#include "controller_xbox360.h"
+#else
 #include "controller_keyboard.h"
 #include "controller_sdl.h"
 #ifdef TARGET_WII_U
 #include "controller_wiiu.h"
+#endif
 #endif
 
 // Analog camera movement by Pathétique (github.com/vrmiguel), y0shin and Mors
@@ -16,12 +21,15 @@
 // moved these from sdl controller implementations
 
 static struct ControllerAPI *controller_implementations[] = {
-#if defined(TARGET_WII_U)
+#if defined(TARGET_XBOX360)
+    &controller_xbox360,
+#elif defined(TARGET_WII_U)
     &controller_wiiu,
+    &controller_keyboard,
 #else
     &controller_sdl,
-#endif
     &controller_keyboard,
+#endif
 };
 
 s32 osContInit(UNUSED OSMesgQueue *mq, u8 *controllerBits, UNUSED OSContStatus *status) {

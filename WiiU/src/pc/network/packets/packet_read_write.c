@@ -12,7 +12,7 @@ static bool sOrderedPackets = false;
 static u16 sCurrentOrderedGroupId = 0;
 static u16 sCurrentOrderedSeqId = 0;
 
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 static bool packet_needs_scalar_swap(u16 length) {
     return length == sizeof(u16) || length == sizeof(u32) || length == sizeof(u64);
 }
@@ -185,8 +185,8 @@ void packet_write(struct Packet* packet, void* data, u16 length) {
         packet->writeError = true;
     }
     u8* dst = &packet->buffer[packet->cursor];
-#ifdef TARGET_WII_U
-    // CoopDX network wire format is little-endian; swap primitive scalars on big-endian Wii U.
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+    // CoopDX network wire format is little-endian; swap primitive scalars on big-endian Wii U and Xbox 360.
     if (packet_needs_scalar_swap(length)) {
         packet_copy_bytes_reversed(dst, data, length);
     } else {
@@ -258,7 +258,7 @@ void packet_read(struct Packet* packet, void* data, u16 length) {
     if (cursor + length >= PACKET_LENGTH) { packet->error = true; return; }
 
     const u8* src = &packet->buffer[cursor];
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
     if (packet_needs_scalar_swap(length)) {
         packet_copy_bytes_reversed(data, src, length);
     } else {
