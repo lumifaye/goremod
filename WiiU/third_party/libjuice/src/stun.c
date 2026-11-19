@@ -7,6 +7,7 @@
  */
 
 #include "stun.h"
+#include "stun_wire.h"
 #include "base64.h"
 #include "const_time.h"
 #include "crc32.h"
@@ -31,14 +32,6 @@
 #define MAX_HMAC_INPUT_LEN (STUN_MAX_USERNAME_LEN + STUN_MAX_REALM_LEN + STUN_MAX_PASSWORD_LEN + 2)
 
 #define MAX_USERHASH_INPUT_LEN (STUN_MAX_USERNAME_LEN + STUN_MAX_REALM_LEN + 1)
-
-#ifndef htonll
-#define htonll(x)                                                                                  \
-	((uint64_t)(((uint64_t)htonl((uint32_t)(x))) << 32) | (uint64_t)htonl((uint32_t)((x) >> 32)))
-#endif
-#ifndef ntohll
-#define ntohll(x) htonll(x)
-#endif
 
 static size_t align32(size_t len) {
 	while (len & 0x03)
@@ -158,15 +151,17 @@ int stun_write(void *buf, size_t size, const stun_message_t *msg, const char *pa
 		pos += len;
 	}
 	if (msg->ice_controlling) {
-		uint64_t ice_controlling = htonll(msg->ice_controlling);
-		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLING, &ice_controlling, 8);
+		uint8_t ice_controlling[8];
+		stun_store_u64(ice_controlling, msg->ice_controlling);
+		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLING, ice_controlling, 8);
 		if (len <= 0)
 			goto overflow;
 		pos += len;
 	}
 	if (msg->ice_controlled) {
-		uint64_t ice_controlled = htonll(msg->ice_controlled);
-		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLED, &ice_controlled, 8);
+		uint8_t ice_controlled[8];
+		stun_store_u64(ice_controlled, msg->ice_controlled);
+		len = stun_write_attr(pos, end - pos, STUN_ATTR_ICE_CONTROLLED, ice_controlled, 8);
 		if (len <= 0)
 			goto overflow;
 		pos += len;
@@ -254,8 +249,9 @@ int stun_write(void *buf, size_t size, const stun_message_t *msg, const char *pa
 		pos += len;
 	}
 	if (msg->reservation_token) {
-		uint64_t reservation_token = htonll(msg->reservation_token);
-		len = stun_write_attr(pos, end - pos, STUN_ATTR_RESERVATION_TOKEN, &reservation_token, 8);
+		uint8_t reservation_token[8];
+		stun_store_u64(reservation_token, msg->reservation_token);
+		len = stun_write_attr(pos, end - pos, STUN_ATTR_RESERVATION_TOKEN, reservation_token, 8);
 		if (len <= 0)
 			goto overflow;
 		pos += len;

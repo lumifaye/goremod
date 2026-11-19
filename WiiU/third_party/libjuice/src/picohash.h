@@ -452,17 +452,15 @@ inline void _picohash_sha1_final(_picohash_sha1_ctx_t *s, void *digest)
     _picohash_sha1_add_uncounted(s, (uint8_t)(s->byteCount >> 5));
     _picohash_sha1_add_uncounted(s, (uint8_t)(s->byteCount << 3));
 
-#ifndef SHA_BIG_ENDIAN
-    { // Swap byte order back
-        int i;
-        for (i = 0; i < 5; i++) {
-            s->state[i] = (((s->state[i]) << 24) & 0xff000000) | (((s->state[i]) << 8) & 0x00ff0000) |
-                          (((s->state[i]) >> 8) & 0x0000ff00) | (((s->state[i]) >> 24) & 0x000000ff);
-        }
+    // SHA-1 specifies big-endian output, regardless of host byte order.
+    uint8_t *out = (uint8_t *)digest;
+    for (int i = 0; i < 5; i++) {
+        uint32_t word = s->state[i];
+        out[i * 4] = (uint8_t)(word >> 24);
+        out[i * 4 + 1] = (uint8_t)(word >> 16);
+        out[i * 4 + 2] = (uint8_t)(word >> 8);
+        out[i * 4 + 3] = (uint8_t)word;
     }
-#endif
-
-    memcpy(digest, s->state, sizeof(s->state));
 }
 
 #define _picohash_sha256_ch(x, y, z) (z ^ (x & (y ^ z)))

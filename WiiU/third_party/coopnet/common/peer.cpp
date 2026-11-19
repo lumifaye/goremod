@@ -10,6 +10,12 @@
 #include "mpacket.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
+#ifdef __WIIU__
+#include <coreinit/debug.h>
+#define WIIU_PEER_TRACE(...) OSReport(__VA_ARGS__)
+#else
+#define WIIU_PEER_TRACE(...) ((void)0)
+#endif
 
 // Set to true to force TURN / relay usage for testing
 static bool sForceRelay = false;
@@ -104,6 +110,7 @@ Peer::Peer(Client* aClient, uint64_t aId, uint32_t aPriority) {
 
     mConnected = false;
     mAgent = juice_create(&config);
+    WIIU_PEER_TRACE("coopnet peer: create role=%s agent=%s\n", mControlling ? "controlling" : "controlled", mAgent ? "ok" : "failed");
 
     // Send if it is an ICE controller
     if (mControlling) {
@@ -135,16 +142,17 @@ void Peer::Update() {
 }
 
 void Peer::Connect(const char* aSdp) {
-    LOG_INFO("\n\nReceive SDP (%" PRIu64 "):\n------------------\n%s\n------------------\n", mId, aSdp);
-    juice_set_remote_description(mAgent, aSdp);
-    if (mControlling) {
-        juice_gather_candidates(mAgent);
-    }
+    LOG_INFO("Receive SDP (%" PRIu64 ")", mId);
+    int rc = juice_set_remote_description(mAgent, aSdp);
+    WIIU_PEER_TRACE("coopnet peer: remote description rc=%d\n", rc);
+    if (rc != 0) { return; }
 
-    // Send if it isn't an ICE controller
-    if (!mControlling) {
-        SendSdp();
-    }
+    // On the controlled side send the SDP first so remote candidates cannot
+    // arrive before the other side has a description. Both roles can then
+    // gather concurrently instead of waiting for the remote STUN timeout.
+    if (!mControlling) { SendSdp(); }
+    rc = juice_gather_candidates(mAgent);
+    WIIU_PEER_TRACE("coopnet peer: begin gathering rc=%d\n", rc);
 }
 
 void Peer::SendSdp() {
@@ -186,17 +194,16 @@ void Peer::CandidateAdd(const char* aSdp) {
 
 void Peer::CandidateDone() {
     LOG_INFO("Remote gathering done %" PRIu64 "", mId);
-    juice_set_remote_gathering_done(mAgent);
-    if (!mControlling) {
-        juice_gather_candidates(mAgent);
-    }
+    int rc = juice_set_remote_gathering_done(mAgent);
+    WIIU_PEER_TRACE("coopnet peer: remote gathering done rc=%d\n", rc);
 }
 
 void Peer::OnStateChanged(juice_state_t aState) {
     LOG_INFO("State change (%" PRIu64 "): %s", mId, juice_state_to_string(aState));
+    WIIU_PEER_TRACE("coopnet peer: state %s\n", juice_state_to_string(aState));
 
-    bool wasConnected = (mLastState == JUICE_STATE_CONNECTED) || (mLastState == JUICE_STATE_COMPLETED);
-    bool wasDisconnected = (mLastState == JUICE_STATE_DISCONNECTED) || (mLastState == JUICE_STATE_FAILED);
+    bool wasConnected = (mCurrentState == JUICE_STATE_CONNECTED) || (mCurrentState == JUICE_STATE_COMPLETED);
+    bool wasDisconnected = (mCurrentState == JUICE_STATE_DISCONNECTED) || (mCurrentState == JUICE_STATE_FAILED);
 
     mConnected = (aState == JUICE_STATE_CONNECTED) || (aState == JUICE_STATE_COMPLETED);
     bool isDisconnected = (aState == JUICE_STATE_DISCONNECTED) || (aState == JUICE_STATE_FAILED);
@@ -230,6 +237,7 @@ void Peer::OnStateChanged(juice_state_t aState) {
 }
 
 void Peer::OnCandidate(const char* aSdp) {
+    WIIU_PEER_TRACE("coopnet peer: local candidate type=%s\n", strstr(aSdp, " typ relay") ? "relay" : strstr(aSdp, " typ srflx") ? "srflx" : strstr(aSdp, " typ host") ? "host" : "other");
     LOG_INFO("Candidate (%" PRIu64 "): %s", mId, aSdp);
 
     if (sForceRelay) {
@@ -254,6 +262,7 @@ void Peer::OnCandidate(const char* aSdp) {
 }
 
 void Peer::OnGatheringDone() {
+    WIIU_PEER_TRACE("coopnet peer: local gathering done\n");
     LOG_INFO("Gathering done (%" PRIu64 ")", mId);
     MPacketPeerCandidateDone(
         { .lobbyId = gClient->mCurrentLobbyId, .userId = mId }
