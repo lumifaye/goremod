@@ -1,0 +1,143 @@
+# Install this file at the repository root: .github/workflows/xbox360-diagnostic.yml
+# This builds the current standalone diagnostic only; it is not a Realism64 game build.
+name: Xbox 360 diagnostic cross-build
+
+on:
+  # The xSDK toolchain bootstrap is a lengthy build. Start it deliberately from Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xbox360-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  XSDK_REF: 9e6de98f6b5d737bce0fecd2864edae94bdd2637
+  JOBS: "1"
+
+jobs:
+  compile-diagnostic:
+    name: Host tests and diagnostic XEX
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out game repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Locate Xbox port files
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f xbox360-port/diagnostic/build.sh ]]; then
+            port_root=xbox360-port
+          elif [[ -f diagnostic/build.sh ]]; then
+            port_root=.
+          else
+            echo "Could not find diagnostic/build.sh" >&2
+            exit 1
+          fi
+          xex_path="$port_root/diagnostic/output/diagnostic.xex"
+          echo "PORT_ROOT=$port_root" >> "$GITHUB_ENV"
+          echo "XEX_PATH=$xex_path" >> "$GITHUB_ENV"
+          echo "port_root=$port_root" >> "$GITHUB_OUTPUT"
+          echo "xex_path=$xex_path" >> "$GITHUB_OUTPUT"
+          echo "Using port directory: $port_root"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bison build-essential ca-certificates cmake curl flex gawk glslang-tools \
+            libexpat1-dev libgmp-dev libisl-dev libmpc-dev libmpfr-dev libzstd-dev \
+            make ninja-build patch pkg-config python3 texinfo xz-utils zlib1g-dev
+
+      - name: Run host-side port tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            run_controller_test.sh \
+            run_audio_test.sh \
+            run_window_test.sh \
+            run_diagnostic_test.sh \
+            run_net_compat_test.sh \
+            run_packet_test.sh; do
+            echo "== $test"
+            bash "$PORT_ROOT/tests/$test"
+          done
+
+      - name: Check out pinned xSDK
+        uses: actions/checkout@v4
+        with:
+          repository: xenosworks/xsdk
+          ref: ${{ env.XSDK_REF }}
+          path: .ci/xsdk
+          persist-credentials: false
+
+      - name: Cache xSDK toolchain build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/xsdk-gcc
+            ~/xsdk-gcc-work
+          key: ${{ runner.os }}-xsdk-${{ env.XSDK_REF }}
+
+      - name: Build pinned xSDK cross-toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOBS="$JOBS" bash .ci/xsdk/tools/toolchain/build.sh
+          test -x "$HOME/xsdk-gcc/bin/powerpc-xsdk-elf-gcc"
+
+      - name: Build xSDK library
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/xsdk-gcc/bin:$PATH"
+          make -C .ci/xsdk -j1
+          test -s .ci/xsdk/build/libxsdk.a
+
+      - name: Cross-compile Xbox diagnostic XEX
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XSDK_ROOT="$GITHUB_WORKSPACE/.ci/xsdk"
+          export XSDK_TOOLCHAIN="$HOME/xsdk-gcc"
+          bash "$PORT_ROOT/diagnostic/build.sh"
+          test -s "$XEX_PATH"
+          {
+            echo "## Xbox 360 diagnostic build"
+            echo "Built the standalone diagnostic XEX at $XEX_PATH."
+            echo "This does not build the integrated Realism64 game or verify Xbox gameplay."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic XEX
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbox360-diagnostic-${{ github.sha }}
+          path: ${{ steps.locate.outputs.xex_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Collect toolchain logs after failure
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p artifacts/toolchain-logs
+          cp -a "$HOME/xsdk-gcc-work/logs/." artifacts/toolchain-logs/ 2>/dev/null || true
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbox360-build-logs-${{ github.run_id }}
+          path: artifacts/toolchain-logs
+          if-no-files-found: ignore
+          retention-days: 7
