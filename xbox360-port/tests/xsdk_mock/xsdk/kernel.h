@@ -26,5 +26,7 @@ typedef struct {
     int16_t thumb_lx, thumb_ly, thumb_rx, thumb_ry;
 } INPUT_GAMEPAD;
 typedef struct { uint32_t packet_number; INPUT_GAMEPAD gamepad; } INPUT_STATE;
+typedef struct { uint16_t left_motor_speed, right_motor_speed; } INPUT_VIBRATION;
 uint32_t XamInputGetState(uint32_t user_index, uint32_t flags, INPUT_STATE *state);
+uint32_t XamInputSetState(uint32_t user_index, uint32_t flags, const INPUT_VIBRATION *vibration);
 #endif

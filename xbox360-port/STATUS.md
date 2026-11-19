@@ -1,12 +1,12 @@
 # Realism64 Xbox 360 port — experimental work in progress
 
-Target: JTAG/RGH Xbox 360, Realism64 only, based on the Wii U version, with controller input and CoopNet where feasible. **There is no playable Xbox build, game XEX, or complete game renderer.** This is an incremental main-branch source commit; no Xbox workflow or Xbox hardware/emulator gameplay test has been run.
+Target: JTAG/RGH Xbox 360, Realism64 only, based on the Wii U version, with controller input and CoopNet where feasible. **There is no playable Xbox build, game XEX, or complete game renderer.** This is an incremental main-branch source commit. The manual diagnostic workflow exists but has not been run; no Xbox hardware/emulator gameplay test has been run.
 
-Base at start of this update: `lumifaye/goremod` main `6312199fcbf268ba07fbb7d21aaa3b16d0c6c888`; xSDK source pinned to `9e6de98f6b5d737bce0fecd2864edae94bdd2637`.
+Base at start of this update: `lumifaye/goremod` main `445596d63440ed96dbd5b7208882eb2ea8d1ffe8`; xSDK source pinned to `9e6de98f6b5d737bce0fecd2864edae94bdd2637`.
 
 ## Incremental work in this commit
 
-- `WiiU/src/pc/controller/`: experimental XAM controller backend and controller selection. It maps buttons, triggers and sticks; rebinding, rumble, focus and actual game integration remain.
+- `WiiU/src/pc/controller/`: experimental XAM controller backend and controller selection. It maps buttons, triggers and sticks, and now sends timed XAM rumble with host-mocked output/timer coverage. Actual XAM behavior, rebinding, focus and game-build integration remain unverified.
 - `WiiU/src/pc/audio/`: experimental 32 kHz signed stereo to 48 kHz six-channel float xSDK audio backend. Not integrated into the game or verified on Xbox.
 - `WiiU/src/pc/gfx/`: experimental xSDK 720p display/presentation window API. It is **not a 3D renderer**, and is not integrated into the game.
 - `WiiU/src/pc/network/packets/`: select the Wii U little-endian scalar packet conversion for Xbox. Raw bytes and all game/network packet call sites still require an endian audit.
@@ -19,7 +19,7 @@ Base at start of this update: `lumifaye/goremod` main `6312199fcbf268ba07fbb7d21
 
 The committed mock tests can be run from a repository checkout with `bash xbox360-port/tests/run_NAME_test.sh`:
 
-- `controller`: host mocks for XAM input mapping and controller dispatch.
+- `controller`: host mocks for XAM input mapping, rumble amplitude/timed stop and controller dispatch.
 - `audio`: host mocks for sample conversion, queueing and shutdown.
 - `window`: host mocks for display/presentation lifecycle and error handling.
 - `diagnostic`: mocked diagnostic loop, controller and audio integration.
