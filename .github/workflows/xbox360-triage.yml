@@ -1,0 +1,31 @@
+name: Xbox 360 compiler diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: Failed Xbox build run ID
+        required: true
+        type: string
+  push:
+    paths: ['.github/workflows/xbox360-triage.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Surface compiler and configure errors from the failed job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ inputs.run || '44456573435' }}
+        run: |
+          gh run view "$RUN" --repo "$GITHUB_REPOSITORY" --log-failed > "$RUNNER_TEMP/build.log"
+          python3 - <<'PY'
+          import pathlib, os, re
+          lines = pathlib.Path(os.environ['RUNNER_TEMP'], 'build.log').read_text(errors='replace').splitlines()
+          hits = [i for i,s in enumerate(lines) if re.search(r'error:|cmake error|undefined reference|FAILED:|not found|no such file|error [0-9]+',s,re.I)]
+          for i in (hits[:6] or [max(len(lines)-5,0)]):
+              text = '\n'.join(line.split('\t')[-1] for line in lines[max(i-1,0):i+6])[:2800]
+              print('::notice title=Build diagnostic::'+text.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))
+          PY
