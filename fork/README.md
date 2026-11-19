@@ -40,6 +40,14 @@ These are local features: they do not change other players or require matching h
 | Wii U | Co-op spotter | `/spotter` reports the closest teammate in the same course, act and area, with distance in game units. |
 | Xbox 360 | Low-health heartbeat | Below four health wedges the controller pulses, faster on the last wedge. Requires rumble enabled. |
 
+Additional field tools:
+
+- **Xbox 360:** Hard landings give a rumble pulse based on descent speed. Hold **Back** and tap **D-pad Up** for a health, coins and stars readout.
+- **Android:** Each 25-coin milestone shows a single popup, without needing to watch the counter.
+- **Wii U:** `/trail mark` drops a local breadcrumb. `/trail` shows the X/Y/Z offsets back to it; `/trail clear` or a warp removes it.
+- **VR:** `/reach` measures the current span between your tracked hands in game units.
+- **Desktop:** `/jumpstats` toggles a landing report with horizontal distance and peak height measured from the first ascending airborne frame.
+
 Use `/fieldkit` to toggle the automatic VR, Android or Xbox feature for the session. Desktop and Wii U tools only run when requested.
 
 ## building

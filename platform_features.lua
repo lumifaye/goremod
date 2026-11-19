@@ -13,6 +13,16 @@ end
 if vr_net_state ~= nil then
     -- Bring tracked palms together to check vitality without a fixed HUD.
     toggle("VR pulse check")
+    hook_chat_command("reach", "- Measure the span between tracked hands", function()
+        local h = vr_net_state()
+        if not h or h[3] == 0 or h[8] == 0 then
+            djui_chat_message_create("Track both hands to measure reach.")
+        else
+            local dx, dy, dz = h[5]-h[10], h[6]-h[11], h[7]-h[12]
+            djui_chat_message_create(string.format("Hand span: %.0f game units", math.sqrt(dx*dx + dy*dy + dz*dz)))
+        end
+        return true
+    end)
     local held, armed = 0, true
     hook_event(HOOK_UPDATE, function()
         if not enabled then held, armed = 0, true; return end
@@ -29,19 +39,39 @@ if vr_net_state ~= nil then
         end
     end)
 elseif platform == "Xbox 360" then
-    toggle("Controller heartbeat")
-    local ticks = 0
+    toggle("Controller heartbeat and landing feedback")
+    local ticks, fallSpeed = 0, 0
+    hook_event(HOOK_ON_WARP, function() fallSpeed = 0 end)
     hook_event(HOOK_MARIO_UPDATE, function(m)
         if m.playerIndex ~= 0 then return end
+        local pad = m.controller
+        if (pad.buttonDown & L_TRIG) ~= 0 and (pad.buttonPressed & U_JPAD) ~= 0 then
+            djui_popup_create(string.format("Status: %d/8 health | %d coins | %d stars",
+                math.min(8, m.health >> 8), m.numCoins, m.numStars), 1)
+        end
+        if enabled and (m.action & ACT_FLAG_AIR) ~= 0 then
+            fallSpeed = math.max(0, -m.vel.y)
+        else
+            if enabled and fallSpeed >= 40 and math.abs(m.pos.y - m.floorHeight) < 5 then
+                queue_rumble_data(5, math.min(100, math.floor(fallSpeed)))
+                ticks = 1 -- don't overwrite the landing pulse with a heartbeat this frame
+            end
+            fallSpeed = 0
+        end
         if not enabled or m.health < 0x100 or m.health >= 0x400 then ticks = 0; return end
         if ticks == 0 then queue_rumble_data(3, 45) end
         ticks = (ticks + 1) % (m.health < 0x200 and 16 or 30)
     end)
 elseif platform == "Android" then
-    toggle("Dive warning")
-    local warned = false
+    toggle("Dive warning and coin milestones")
+    local warned, lastCoins = false, nil
+    hook_event(HOOK_ON_WARP, function() lastCoins = nil end)
     hook_event(HOOK_MARIO_UPDATE, function(m)
         if m.playerIndex ~= 0 then return end
+        if enabled and lastCoins and m.numCoins // 25 > lastCoins // 25 then
+            djui_popup_create(string.format("Coin milestone: %d", (m.numCoins // 25) * 25), 1)
+        end
+        lastCoins = m.numCoins
         if not enabled or (m.action & ACT_FLAG_SWIMMING) == 0 or m.health >= 0x500 then
             warned = false
         elseif not warned and m.health >= 0x100 and m.health < 0x400 and m.pos.y < m.waterLevel - 80 then
@@ -50,6 +80,23 @@ elseif platform == "Android" then
         end
     end)
 elseif platform == "Wii U" then
+    local mark
+    hook_event(HOOK_ON_WARP, function() mark = nil end)
+    hook_chat_command("trail", "[mark|clear] - Remember a spot and check the way back", function(arg)
+        local p = gMarioStates[0].pos
+        if arg == "mark" then
+            mark = {x=p.x, y=p.y, z=p.z}
+            djui_chat_message_create("Trail marker set.")
+        elseif arg == "clear" then
+            mark = nil
+            djui_chat_message_create("Trail marker cleared.")
+        elseif mark then
+            djui_chat_message_create(string.format("Back to marker: X %+.0f, Y %+.0f, Z %+.0f", mark.x-p.x, mark.y-p.y, mark.z-p.z))
+        else
+            djui_chat_message_create("Use /trail mark to remember this spot.")
+        end
+        return true
+    end)
     -- A local co-op spotter; unlike the GamePad's tap-to-fling this never
     -- targets or moves another player (and doesn't consume the touch event).
     hook_chat_command("spotter", "- Find the closest teammate in this area", function()
@@ -67,6 +114,29 @@ elseif platform == "Wii U" then
         return true
     end)
 elseif platform == "Windows" or platform == "Linux" or platform == "Mac OSX" or platform == "FreeBSD" or platform == "Unix" then
+    local tracking, launch, apex = false, nil, nil
+    hook_chat_command("jumpstats", "- Toggle jump measurements", function()
+        tracking, launch = not tracking, nil
+        djui_chat_message_create(tracking and "Jump stats on." or "Jump stats off.")
+        return true
+    end)
+    hook_event(HOOK_ON_WARP, function() launch = nil end)
+    hook_event(HOOK_MARIO_UPDATE, function(m)
+        if not tracking or m.playerIndex ~= 0 then return end
+        local p = m.pos
+        if (m.action & ACT_FLAG_AIR) ~= 0 then
+            if not launch and m.vel.y > 0 then
+                launch, apex = {x=p.x, y=p.y, z=p.z}, p.y
+            end
+            if launch then apex = math.max(apex, p.y) end
+        elseif launch then
+            if math.abs(p.y-m.floorHeight) < 5 then
+                local dx, dz = p.x-launch.x, p.z-launch.z
+                djui_chat_message_create(string.format("Jump: %.0f units across, %.0f up", math.sqrt(dx*dx+dz*dz), apex-launch.y))
+            end
+            launch = nil
+        end
+    end)
     local start, previous
     hook_chat_command("split", "[start|stop] - Record a practice split", function(arg)
         local now = get_global_timer()
