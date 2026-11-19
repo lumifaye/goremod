@@ -570,7 +570,7 @@
 #elif LUA_INT_TYPE == LUA_INT_LONGLONG	/* }{ long long */
 
 /* use presence of macro LLONG_MAX as proxy for C99 compliance */
-#if defined(LLONG_MAX)		/* { */
+#if defined(LLONG_MAX) && defined(LLONG_MIN)	/* { */
 /* use ISO C99 stuff */
 
 #define LUA_INTEGER		long long
@@ -578,6 +578,14 @@
 
 #define LUA_MAXINTEGER		LLONG_MAX
 #define LUA_MININTEGER		LLONG_MIN
+
+#elif defined(__XSDK__) && defined(__LONG_LONG_MAX__) /* }{ */
+/* xSDK newlib does not expose C99 limits in every C++ translation unit.
+** Keep the C/C++ Lua ABI identical using the target compiler's limit. */
+#define LUA_INTEGER         long long
+#define LUA_INTEGER_FRMLEN  "ll"
+#define LUA_MAXINTEGER      __LONG_LONG_MAX__
+#define LUA_MININTEGER      (-LUA_MAXINTEGER - 1LL)
 
 #elif defined(LUA_USE_WINDOWS) /* }{ */
 /* in Windows, can use specific Windows types */
