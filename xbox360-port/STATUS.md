@@ -1,5 +1,9 @@
 # Realism64 Xbox 360 port — experimental work in progress
 
+Current game-target work and verification limits: see [BUILD.md](BUILD.md). The renderer, backend selection and game build rules described there supersede the earlier diagnostic-only status below. No playable build has been verified.
+
+## Historical diagnostic baseline
+
 Target: JTAG/RGH Xbox 360, Realism64 only, based on the Wii U version, with controller input and CoopNet where feasible. **There is no playable Xbox build, game XEX, or complete game renderer.** This is an incremental main-branch source commit. The manual diagnostic workflow exists but has not been run; no Xbox hardware/emulator gameplay test has been run.
 
 Base at start of this update: `lumifaye/goremod` main `445596d63440ed96dbd5b7208882eb2ea8d1ffe8`; xSDK source pinned to `9e6de98f6b5d737bce0fecd2864edae94bdd2637`.

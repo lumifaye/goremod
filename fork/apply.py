@@ -98,7 +98,7 @@ BASES = {
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 
-NOT_THE_MOD = {"site", "fork", "release", "dist", "node_modules", "Untitled.png", "WiiU", "PC", "VR", "Android"}
+NOT_THE_MOD = {"site", "fork", "release", "dist", "node_modules", "xbox360-port", "Untitled.png", "WiiU", "PC", "VR", "Android"}
 
 
 class Problem(Exception):

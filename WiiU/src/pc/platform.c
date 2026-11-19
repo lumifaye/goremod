@@ -294,7 +294,9 @@ static void sys_fatal_impl(const char *msg) {
 
 #else
 
+#ifndef TARGET_XBOX360
 #include <SDL2/SDL.h>
+#endif
 
 #ifdef TARGET_WII_U
 static const char *wiiu_default_write_path(void) {
@@ -309,7 +311,9 @@ static const char *wiiu_default_write_path(void) {
 #endif
 
 const char *sys_user_path(void) {
-#ifdef TARGET_WII_U
+#ifdef TARGET_XBOX360
+    return "game:/";
+#elif defined(TARGET_WII_U)
     return wiiu_default_write_path();
 #else
     static char path[SYS_MAX_PATH] = { 0 };
@@ -383,7 +387,9 @@ const char *sys_exe_path_dir(void) {
 }
 
 const char *sys_exe_path_file(void) {
-#ifdef TARGET_WII_U
+#ifdef TARGET_XBOX360
+    return "game:/default.xex";
+#elif defined(TARGET_WII_U)
     static char path[SYS_MAX_PATH];
     if (path[0] != '\0') { return path; }
     if (getcwd(path, sizeof(path)) == NULL) {
@@ -413,7 +419,9 @@ const char *sys_exe_path_file(void) {
 }
 
 static void sys_fatal_impl(const char *msg) {
+#ifndef TARGET_XBOX360
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR , "Fatal error", msg, NULL);
+#endif
     fprintf(stderr, "FATAL ERROR:\n%s\n", msg);
     fflush(stderr);
     exit(1);

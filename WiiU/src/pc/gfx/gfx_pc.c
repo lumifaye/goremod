@@ -114,7 +114,7 @@ static bool dropped_frame = false;
 
 // 3 vertices per triangle. Desktop path tops out around 26 floats/vtx, while
 // Wii U can reach higher due 4-float texcoords + extended combiner inputs.
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 static float buf_vbo[MAX_BUFFERED * (48 * 3)] = { 0.0f };
 #else
 static float buf_vbo[MAX_BUFFERED * (26 * 3)] = { 0.0f };

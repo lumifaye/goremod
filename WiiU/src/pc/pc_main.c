@@ -50,6 +50,11 @@
 #include "pc/utils/misc.h"
 #include "pc/mods/mods.h"
 #include "pc/wiiu_network.h"
+#ifdef TARGET_XBOX360
+#include "gfx/gfx_xbox360_window.h"
+#include "audio/audio_xbox360.h"
+extern struct GfxRenderingAPI gfx_xbox360_api;
+#endif
 
 #include "debug_context.h"
 #include "menu/intro_geo.h"
@@ -63,7 +68,7 @@
 #include "pc/discord/discord.h"
 #endif
 
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
 #include "pc/mumble/mumble.h"
 #endif
 
@@ -71,7 +76,9 @@
 #include <windows.h>
 #endif
 
+#ifndef TARGET_XBOX360
 #include <SDL2/SDL.h>
+#endif
 
 #ifdef TARGET_WII_U
 #include <coreinit/debug.h>
@@ -250,6 +257,9 @@ static s32 get_num_frames_to_draw(f64 t, u32 frameLimit) {
 }
 
 static u32 get_display_refresh_rate(void) {
+#ifdef TARGET_XBOX360
+    return 60; // xSDK 720p presentation mode
+#else
     static u32 refreshRate = 0;
     if (!refreshRate) {
         SDL_DisplayMode mode;
@@ -260,6 +270,7 @@ static u32 get_display_refresh_rate(void) {
         }
     }
     return refreshRate;
+#endif
 }
 
 static u32 get_target_refresh_rate(void) {
@@ -273,6 +284,11 @@ static void select_graphics_backend(void) {
         return;
     }
 
+#ifdef TARGET_XBOX360
+    gWindowApi = &gfx_xbox360_window;
+    gRenderApi = &gfx_xbox360_api;
+    gAudioApi = &audio_xbox360;
+#else
 #ifdef TARGET_WII_U
     // one backend on the Wii U: GX2 for the window and the renderer, SDL for the sound
     gWindowApi = &gfx_gx2_window;
@@ -313,6 +329,7 @@ static void select_graphics_backend(void) {
             gAudioApi  = &audio_sdl;
             break;
     }
+#endif
 
     if (!gAudioApi->init()) {
         gAudioApi = &audio_null;
@@ -658,7 +675,7 @@ void* main_game_init(UNUSED void* dummy) {
 #ifdef TARGET_WII_U
     OSReport("pc_main: after network_player_init\n");
 #endif
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
     mumble_init();
 #endif
 
@@ -878,7 +895,7 @@ int main(int argc, char *argv[]) {
 #ifdef DISCORD_SDK
         discord_update();
 #endif
-#ifndef TARGET_WII_U
+#if !defined(TARGET_WII_U) && !defined(TARGET_XBOX360)
         mumble_update();
 #endif
 #ifdef DEBUG

@@ -1,0 +1,93 @@
+name: Xbox 360 game cross-build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/**']
+    paths: ['WiiU/**', 'fork/**', 'xbox360-port/**', '.github/workflows/xbox360-game.yml']
+permissions:
+  contents: read
+concurrency:
+  group: xbox360-game-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  game:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      XSDK_REF: 9e6de98f6b5d737bce0fecd2864edae94bdd2637
+      XSDK_ROOT: ${{ github.workspace }}/.ci/xsdk
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: xenosworks/xsdk
+          ref: ${{ env.XSDK_REF }}
+          path: .ci/xsdk
+          persist-credentials: false
+      - name: Install host prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bison flex texinfo gawk libisl-dev libmpc-dev libmpfr-dev libgmp-dev libaudiofile-dev libpng-dev libzstd-dev zlib1g-dev ninja-build
+          echo "$HOME/xsdk-gcc/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache/restore@v4
+        id: tools
+        with:
+          path: ~/xsdk-gcc
+          key: xsdk-ubuntu24-v1-${{ env.XSDK_REF }}
+      - name: Build patched PowerPC C and C++ toolchain
+        if: steps.tools.outputs.cache-hit != 'true'
+        run: JOBS=3 bash "$XSDK_ROOT/tools/toolchain/build.sh"
+      - uses: actions/cache/save@v4
+        if: steps.tools.outputs.cache-hit != 'true'
+        with:
+          path: ~/xsdk-gcc
+          key: xsdk-ubuntu24-v1-${{ env.XSDK_REF }}
+      - name: Build xSDK title runtime
+        run: make -C "$XSDK_ROOT" -j3 build/libxsdk.a
+      - uses: actions/checkout@v4
+        with:
+          repository: madler/zlib
+          ref: 51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+          path: .ci/zlib
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: libsdl-org/SDL
+          ref: 5d249570393f7a37e037abf22cd6012a4cc56a71
+          path: .ci/sdl2
+          persist-credentials: false
+      - name: Cross-compile target dependencies
+        run: |
+          prefix="$RUNNER_TEMP/ports"
+          (cd .ci/zlib && CHOST=powerpc-xsdk-elf ./configure --static --prefix="$prefix" && make -j3 libz.a && make install-libs)
+          cmake -S .ci/sdl2 -B "$RUNNER_TEMP/sdl-build" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$XSDK_ROOT/cmake/xsdk.cmake" -DCMAKE_INSTALL_PREFIX="$prefix" \
+            -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST=OFF -DSDL_TESTS=OFF -DSDL_ATOMIC=ON \
+            -DSDL_HIDAPI=OFF -DSDL_DYNAPI=OFF -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF -DSDL_VULKAN=OFF
+          cmake --build "$RUNNER_TEMP/sdl-build" --target install -j3
+      - name: Embed Realism64 and build game title
+        shell: bash
+        run: |
+          python3 fork/apply.py pc WiiU
+          ports="$RUNNER_TEMP/ports"
+          make -C WiiU -j3 -k TARGET_XBOX360=1 EXTRA_INCLUDES="$ports/include" \
+            XBOX_PORT_LIBS="-L$ports/lib -lSDL2" all 2>&1 | tee "$RUNNER_TEMP/game.log"
+          test "$(head -c4 WiiU/build/us_xbox360/default.xex)" = XEX2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: compiler-logs
+          path: |
+            ~/xsdk-gcc-work/logs/
+            ${{ runner.temp }}/game.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Realism64-Xbox360
+          path: |
+            WiiU/build/us_xbox360/default.xex
+            WiiU/build/us_xbox360/lang/
+            WiiU/build/us_xbox360/mods/
+            WiiU/build/us_xbox360/palettes/
+          if-no-files-found: error

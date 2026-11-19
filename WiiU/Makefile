@@ -31,6 +31,19 @@ LUA_UNSAFE ?= 0
 TARGET_N64 = 0
 # Build for the Wii U
 TARGET_WII_U ?= 0
+TARGET_XBOX360 ?= 0
+CONSOLE_BUILD := $(filter 1,$(TARGET_WII_U) $(TARGET_XBOX360))
+ifeq ($(TARGET_XBOX360),1)
+  ifeq ($(TARGET_WII_U),1)
+    $(error Select only one console target)
+  endif
+  ifeq ($(wildcard $(XSDK_ROOT)/include/xsdk/gpu.h),)
+    $(error Set XSDK_ROOT to the xSDK source directory)
+  endif
+  CROSS := powerpc-xsdk-elf-
+  TARGET_BITS := 32
+  COOPNET := 0
+endif
 # Strip debug symbols from the Wii U ELF before RPX conversion.
 WIIU_STRIP ?= 0
 # Add map/symbol oriented flags for Wii U crash debugging.
@@ -89,7 +102,7 @@ WINDOWS_BUILD ?= 0
 
 WINDOWS_AUTO_BUILDER ?= 0
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
   WINDOWS_BUILD := 0
   OSX_BUILD := 0
   TARGET_RPI := 0
@@ -148,7 +161,7 @@ ifeq ($(HOST_OS),Linux)
 endif
 
 # Keep host auto-detection from enabling desktop-only flags for cross-compiling.
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
   WINDOWS_BUILD := 0
   OSX_BUILD := 0
   TARGET_RPI := 0
@@ -465,13 +478,17 @@ _ := $(shell $(PYTHON) $(TOOLS_DIR)/copy_extended_sounds.py)
 
 BUILD_DIR_BASE := build
 # BUILD_DIR is the location where all build artifacts are placed
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(TARGET_XBOX360),1)
+  BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_xbox360
+else ifeq ($(TARGET_WII_U),1)
   BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_wiiu
 else
   BUILD_DIR := $(BUILD_DIR_BASE)/$(VERSION)_pc
 endif
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(TARGET_XBOX360),1)
+  EXE := $(BUILD_DIR)/default.xex
+else ifeq ($(TARGET_WII_U),1)
   EXE := $(BUILD_DIR)/sm64coopdx.$(VERSION).rpx
 else ifeq ($(WINDOWS_BUILD),1)
 	EXE := $(BUILD_DIR)/sm64coopdx.exe
@@ -513,7 +530,7 @@ endif
 
 SRC_DIRS += src/pc/mumble
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
   SRC_DIRS := $(filter-out src/pc/mumble,$(SRC_DIRS))
 endif
 
@@ -538,7 +555,7 @@ GODDARD_C_FILES   := $(foreach dir,$(GODDARD_SRC_DIRS),$(wildcard $(dir)/*.c))
 ULTRA_S_FILES     := $(foreach dir,$(ULTRA_SRC_DIRS),$(wildcard $(dir)/*.s))
 GENERATED_C_FILES := $(BUILD_DIR)/assets/mario_anim_data.c $(BUILD_DIR)/assets/demo_data.c
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
   LUA53_SRCDIR      := third_party/lua-5.3.6/src
   LUA53_C_FILES     := $(filter-out $(LUA53_SRCDIR)/lua.c $(LUA53_SRCDIR)/luac.c,$(wildcard $(LUA53_SRCDIR)/*.c))
   C_FILES           += $(LUA53_C_FILES)
@@ -554,6 +571,11 @@ ifeq ($(TARGET_WII_U),1)
 else
   C_FILES           := $(filter-out src/pc/controller/controller_wiiu.c src/pc/wiiu_pthread_shim.c src/pc/pc_diag_wiiu.c src/pc/gfx/gx2_shader_gen.c,$(C_FILES))
   CPP_FILES         := $(filter-out src/pc/gfx/gfx_gx2.cpp src/pc/gfx/gfx_gx2_window.cpp,$(CPP_FILES))
+endif
+
+ifeq ($(TARGET_XBOX360),1)
+  C_FILES := $(filter-out src/pc/audio/audio_sdl.c src/pc/controller/controller_wiiu.c src/pc/gfx/gx2_shader_gen.c src/pc/wiiu_pthread_shim.c src/pc/pc_diag_wiiu.c,$(C_FILES))
+  CPP_FILES := $(filter-out src/pc/gfx/gfx_gx2%.cpp,$(CPP_FILES))
 endif
 
 ifeq ($(TARGET_N64),0)
@@ -816,7 +838,7 @@ else
   INCLUDE_DIRS += sound lib/lua/include lib/coopnet/include $(EXTRA_INCLUDES)
 endif
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
   INCLUDE_DIRS := $(filter-out lib/lua/include lib/coopnet/include,$(INCLUDE_DIRS))
   INCLUDE_DIRS += third_party/lua-5.3.6/src third_party/coopnet/include third_party/coopnet/lib/include third_party/coopnet/common third_party/libjuice/include third_party/libjuice/include/juice third_party/libjuice/src
 endif
@@ -825,7 +847,9 @@ endif
 
 BACKEND_LDFLAGS :=
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(TARGET_XBOX360),1)
+  BACKEND_CFLAGS := -DTARGET_XBOX360 -D__XSDK__ -mcpu=cell -fno-pic -I$(XSDK_ROOT)/include -DSTB_VORBIS_BIG_ENDIAN=1 -DMA_NO_DEVICE_IO -DMA_NO_RUNTIME_LINKING -DMA_NO_THREADING
+else ifeq ($(TARGET_WII_U),1)
 
 # Wii U: GX2 window and renderer, SDL2 sound, Wii U controllers.
 # No OpenGL, no Direct3D and no sdl2-config here; -lSDL2 is added with the Wii U LDFLAGS below.
@@ -1105,7 +1129,7 @@ else
 endif
 
 # Enable ASLR where supported by the platform output format.
-ifneq ($(TARGET_WII_U),1)
+ifneq ($(CONSOLE_BUILD),1)
   CFLAGS += -fPIE
 endif
 
@@ -1121,6 +1145,10 @@ endif
 #==============================================================================#
 # Extra CC Flags                                                               #
 #==============================================================================#
+
+ifeq ($(TARGET_XBOX360),1)
+  LDFLAGS := -static -nostdlib -T$(XSDK_ROOT)/src/xsdk.ld -Wl,--start-group $(XSDK_ROOT)/build/libxsdk.a $(XBOX_PORT_LIBS) -lz -lstdc++ -lc -lm -lgcc -Wl,--end-group
+endif
 
 # Enforce -Werror in strict mode
 ifeq ($(STRICT),1)
@@ -1527,7 +1555,7 @@ $(ENDIAN_BITWIDTH): $(TOOLS_DIR)/determine-endian-bitwidth.c
 	@$(RM) $@.dummy1
 	@$(RM) $@.dummy2
 
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(CONSOLE_BUILD),1)
 # Where the Wii U sound data comes from. WIIU_SOUND =
 #   repo      (default) the files in sound/ of this repository. sound_data_compressed.ctl/.tbl
 #             are kept in the Wii U form here (32-bit, big-endian; sound/samples_offsets.h
@@ -1894,7 +1922,9 @@ else
   $(EXE): $(O_FILES) $(MIO0_FILES:.mio0=.o) $(ULTRA_O_FILES) $(GODDARD_O_FILES) $(RPC_COPY_TARGETS) $(DISCORD_SDK_COPY_TARGETS) $(COOPNET_COPY_TARGETS) $(UPDATER_COPY_TARGETS) $(BUILD_DIR)/$(LANG_DIR) $(BUILD_DIR)/$(MOD_DIR) $(BUILD_DIR)/$(PALETTES_DIR)
 	@$(PRINT) "$(GREEN)Linking executable: $(BLUE)$@ $(NO_COL)\n"
 	$(V)$(LD) $(PROF_FLAGS) -L $(BUILD_DIR) -o $(ELF) $(O_FILES) $(ULTRA_O_FILES) $(GODDARD_O_FILES) $(LDFLAGS)
-ifeq ($(TARGET_WII_U),1)
+ifeq ($(TARGET_XBOX360),1)
+	$(V)$(PYTHON) $(XSDK_ROOT)/tools/elf2xex.py --title-name Realism64 $(ELF) $@
+else ifeq ($(TARGET_WII_U),1)
 ifeq ($(WIIU_STRIP),1)
 	$(V)$(OBJCOPY) --strip-all $(ELF) $(ELF:.elf=.stripped.elf)
 	$(V)elf2rpl $(ELF:.elf=.stripped.elf) $@

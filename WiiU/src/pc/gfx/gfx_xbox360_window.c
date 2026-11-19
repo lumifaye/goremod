@@ -43,9 +43,12 @@ static bool xbox_start_frame(void) {
     xsdk_gpu_set_target(display_width, display_height);
     return true;
 }
+static void (*scanout)(uint32_t,uint32_t,uint32_t);
+void xbox_set_scanout(void (*fn)(uint32_t,uint32_t,uint32_t)) { scanout=fn; }
 static void xbox_swap_begin(void) {
     if (!frame_open) return;
-    xsdk_gpu_resolve(frame_address,display_width,display_height,0xff000000u);
+    if (scanout) scanout(frame_address,display_width,display_height);
+    else xsdk_gpu_resolve(frame_address,display_width,display_height,0xff000000u);
     xsdk_present_end();
     frame_open=false;
 }
