@@ -38,6 +38,12 @@ int main(void) {
       XboxModule m;
       xb_module(&m, &f, ps);
       assert(m.n < sizeof(m.words) / sizeof(*m.words));
+      // xSC treats each constructor operand as a scalar lane, even if
+      // handed a vector. Reject truncated vec4 constructions before compiling.
+      for (unsigned at = 5; at < m.n; at += m.words[at] >> 16) {
+        if ((m.words[at] & 0xffff) == 80 && m.words[at+1] == XB_V4)
+          assert((m.words[at] >> 16) == 7);
+      }
       assert(m.stride ==
              4u * (4 + 2 * (f.used_textures[0] + f.used_textures[1]) +
                    4 * f.opt_fog + 2 * f.opt_light_map +

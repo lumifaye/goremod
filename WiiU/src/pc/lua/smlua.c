@@ -343,16 +343,25 @@ static void smlua_install_compat_globals(void) {
 }
 
 static bool smlua_path_ptr_is_plausible(const char* path) {
+#ifdef TARGET_WII_U
     uintptr_t p = (uintptr_t)path;
     return path != NULL && p >= 0x00100000u && p <= 0x7fffffffu;
+#else
+    // cachedPath is an owned string, not a Wii U guest address.
+    return path != NULL;
+#endif
 }
 
 int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bool isModInit) {
     int rc = LUA_OK;
-    if (!smlua_path_ptr_is_plausible(file->cachedPath)) {
-        LOG_LUA("Failed to load lua script from mod '%s': invalid path pointer.",
-                (mod != NULL && mod->name != NULL) ? mod->name : "unknown");
-        return LUA_ERRFILE;
+    char localPath[SYS_MAX_PATH];
+    const char *path = file->cachedPath;
+    if (!smlua_path_ptr_is_plausible(path)) {
+        if (!mod || !mod_file_full_path(localPath, mod, file)) {
+            LOG_LUA("Failed to resolve Lua script: '%s'", file->relativePath);
+            return LUA_ERRFILE;
+        }
+        path = localPath;
     }
 
     lua_State* L = gLuaState;
@@ -361,17 +370,17 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
 
     gSmLuaConvertSuccess = true;
     gLuaInitializingScript = 1;
-    LOG_INFO("Loading lua script '%s'", file->cachedPath);
+    LOG_INFO("Loading lua script '%s'", path);
 
-    FILE *f = f_open_r(file->cachedPath);
+    FILE *f = f_open_r(path);
     if (!f) {
-        LOG_LUA("Failed to load lua script '%s': File not found.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': File not found.", path);
         gLuaInitializingScript = 0;
         lua_settop(L, prevTop);
         return LUA_ERRFILE;
     }
     if (f_seek(f, 0L, SEEK_END) != 0) {
-        LOG_LUA("Failed to load lua script '%s': Cannot seek to end.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': Cannot seek to end.", path);
         gLuaInitializingScript = 0;
         f_close(f);
         f_delete(f);
@@ -380,7 +389,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
     }
     long fileSizeLong = f_tell(f);
     if (fileSizeLong < 0) {
-        LOG_LUA("Failed to load lua script '%s': Cannot determine file size.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': Cannot determine file size.", path);
         gLuaInitializingScript = 0;
         f_close(f);
         f_delete(f);
@@ -388,7 +397,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
         return LUA_ERRFILE;
     }
     if ((unsigned long)fileSizeLong > (unsigned long)(SIZE_MAX - 1)) {
-        LOG_LUA("Failed to load lua script '%s': File too large.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': File too large.", path);
         gLuaInitializingScript = 0;
         f_close(f);
         f_delete(f);
@@ -396,7 +405,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
         return LUA_ERRMEM;
     }
     if (f_seek(f, 0L, SEEK_SET) != 0) {
-        LOG_LUA("Failed to load lua script '%s': Cannot seek to start.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': Cannot seek to start.", path);
         gLuaInitializingScript = 0;
         f_close(f);
         f_delete(f);
@@ -407,7 +416,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
     size_t length = (size_t)fileSizeLong;
     u8 *buffer = calloc(length + 1, 1);
     if (!buffer) {
-        LOG_LUA("Failed to load lua script '%s': Cannot allocate buffer.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s': Cannot allocate buffer.", path);
         gLuaInitializingScript = 0;
         f_close(f);
         f_delete(f);
@@ -418,7 +427,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
         size_t bytesRead = f_read(buffer, 1, length, f);
         if (bytesRead < length) {
             LOG_LUA("Failed to load lua script '%s': Unexpected EOF (%llu/%llu bytes).",
-                    file->cachedPath,
+                    path,
                     (unsigned long long)bytesRead,
                     (unsigned long long)length);
             gLuaInitializingScript = 0;
@@ -433,19 +442,19 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
     f_close(f);
     f_delete(f);
 #ifdef TARGET_WII_U
-    SMLUA_WIIU_LOG("smlua: load '%s'\n", file->cachedPath);
+    SMLUA_WIIU_LOG("smlua: load '%s'\n", path);
 #endif
-    rc = luaL_loadbuffer(L, (const char*)buffer, length, file->cachedPath);
+    rc = luaL_loadbuffer(L, (const char*)buffer, length, path);
     free(buffer);
     if (rc != LUA_OK) {
-        LOG_LUA("Failed to load lua script '%s'.", file->cachedPath);
+        LOG_LUA("Failed to load lua script '%s'.", path);
         LOG_LUA("%s", smlua_to_string(L, lua_gettop(L)));
         gLuaInitializingScript = 0;
         lua_settop(L, prevTop);
         return rc;
     }
 #ifdef TARGET_WII_U
-    SMLUA_WIIU_LOG("smlua: loaded chunk '%s'\n", file->cachedPath);
+    SMLUA_WIIU_LOG("smlua: loaded chunk '%s'\n", path);
 #endif
 
     if (isModInit) {
@@ -523,7 +532,7 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
 #endif
     rc = smlua_pcall(L, 0, 1, 0);
     if (rc != LUA_OK) {
-        LOG_LUA("Failed to execute lua script '%s'.", file->cachedPath);
+        LOG_LUA("Failed to execute lua script '%s'.", path);
 #ifdef TARGET_WII_U
         SMLUA_WIIU_LOG("smlua: exec failed rc=%d file='%s/%s'\n", rc, mod->relativePath, file->relativePath);
         {

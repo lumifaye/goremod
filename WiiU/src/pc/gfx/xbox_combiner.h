@@ -201,7 +201,14 @@ static void xb_module(XboxModule *m, const struct CCFeatures *f, bool ps) {
             reg[i] = v[colors[i]];
             if (!f->opt_alpha) {
                 unsigned id = m->next++;
-                INST(80, XB_V4, id, reg[i], XB_ONE);
+                // xSC lowers each OpCompositeConstruct operand to one lane.
+                // vec4(vec3, 1) would write 1 to green instead of alpha.
+                unsigned rgb[3];
+                for (unsigned k = 0; k < 3; k++) {
+                    rgb[k] = m->next++;
+                    INST(81, XB_FLOAT, rgb[k], reg[i], k);
+                }
+                INST(80, XB_V4, id, rgb[0], rgb[1], rgb[2], XB_ONE);
                 reg[i] = id;
             }
         }
