@@ -14,11 +14,14 @@ static bool open;
 
 static bool xbox_audio_init(void) {
     head = count = phase = queued = 0;
-    open = xsdk_audio_open(0) == STATUS_SUCCESS;
+    open = xsdk_audio_open(XSDK_AUDIO_FRAMES_AHEAD_MAX) == STATUS_SUCCESS;
     return open;
 }
+static void xbox_audio_drain(void);
 static int xbox_audio_buffered(void) {
     if (!open) return 0;
+    /* Service pending PCM even when the producer skips synthesis this tick. */
+    xbox_audio_drain();
     XsdkAudioStats stats;
     xsdk_audio_stats(&stats);
     /* queued/played are frame counters (256 samples per 48 kHz frame). */
@@ -26,7 +29,7 @@ static int xbox_audio_buffered(void) {
     if (pending > XSDK_AUDIO_FRAMES_AHEAD_MAX) pending = XSDK_AUDIO_FRAMES_AHEAD_MAX;
     return (int)count + (int)((pending * OUTPUT_SAMPLES * 2u) / 3u);
 }
-static int xbox_audio_desired(void) { return 1100; }
+static int xbox_audio_desired(void) { return (XSDK_AUDIO_FRAMES_AHEAD_MAX * OUTPUT_SAMPLES * 2) / 3; }
 
 /* 48 kHz / 32 kHz = 3/2. Linear interpolation keeps the fractional phase
  * across play calls and across hardware frames; one input frame is lookahead. */

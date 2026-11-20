@@ -8,7 +8,7 @@
 static float audio_frame[XSDK_AUDIO_FRAME_FLOATS];
 static int queued, playing, capacity=8, closed;
 static float last_left,last_right;
-NTSTATUS xsdk_audio_open(uint32_t ahead) { (void)ahead; queued=playing=closed=0; return STATUS_SUCCESS; }
+NTSTATUS xsdk_audio_open(uint32_t ahead) { assert(ahead==XSDK_AUDIO_FRAMES_AHEAD_MAX); queued=playing=closed=0; return STATUS_SUCCESS; }
 NTSTATUS xsdk_audio_next_frame(uint32_t timeout, float **frame) {
     assert(timeout==0);
     if(queued-playing>=capacity)return STATUS_TIMEOUT;
@@ -27,7 +27,9 @@ int main(void) {
  assert(queued==4);assert(fabsf(last_left-.5f)<0.00001f);assert(fabsf(last_right+.25f)<0.00001f);
  int before=audio_xbox360.buffered();playing=2;assert(audio_xbox360.buffered()<before);
  capacity=0;audio_xbox360.play((uint8_t*)in,sizeof(in));assert(queued==4);assert(audio_xbox360.buffered()>0);
+ capacity=8;playing=queued;assert(audio_xbox360.buffered()>0);assert(queued>4);
+ int final_queued=queued;
  audio_xbox360.shutdown();assert(closed==1 && audio_xbox360.buffered()==0);
- audio_xbox360.play((uint8_t*)in,sizeof(in));assert(queued==4);
+ audio_xbox360.play((uint8_t*)in,sizeof(in));assert(queued==final_queued);
  puts("xSDK audio frame conversion and queue mocks: passed");
 }

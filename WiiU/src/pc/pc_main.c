@@ -441,7 +441,7 @@ void produce_interpolation_frames_and_delay(void) {
 // It's just better to have this off the stack, Because the size isn't small.
 // It also may help static analysis and bug catching.
 enum { AUDIO_BATCH_MIN = 2 };
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
 enum { AUDIO_BATCH_MAX = 4 };
 #else
 enum { AUDIO_BATCH_MAX = 2 };
@@ -462,7 +462,7 @@ inline static void buffer_audio(void) {
     int desiredBuffered = gAudioApi->get_desired_buffered();
     u32 numAudioSamples = samplesLeft < desiredBuffered ? SAMPLES_HIGH : SAMPLES_LOW;
     u32 audioBatches = AUDIO_BATCH_MIN;
-#ifdef TARGET_WII_U
+#if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
     // Never advance synth state for audio that won't be queued.
     if (samplesLeft >= 5200) {
         return;
