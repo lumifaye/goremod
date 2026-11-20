@@ -71,7 +71,13 @@ f32 djui_gfx_get_scale(void) {
     if (configDjuiScale == 0) { // auto
         u32 windowWidth, windowHeight;
         gfx_get_dimensions(&windowWidth, &windowHeight);
+#ifdef TARGET_XBOX360
+        // Couch distance: target a 480-unit UI canvas, but keep the 710-unit
+        // player list inside the safe width on a 4:3 display.
+        return clamp(MIN(windowHeight / 480.0f, windowWidth / 760.0f), 0.5f, 1.5f);
+#else
         return clamp(round_to_multiple_f(((f32)windowHeight / (f32)SCREEN_HEIGHT) / 4.0f, 0.5f), 0.5f, 1.5f);
+#endif
     } else {
         switch (configDjuiScale) {
             case 1:  return 0.5f;

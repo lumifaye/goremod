@@ -39,11 +39,21 @@ static void scanout(uint32_t addr, uint32_t w, uint32_t h) {
         return;
     xsdk_texture_attach(&dst, xsdk_present_pixels(addr));
     if (w == 1280 && h == 720) {
-        static uint32_t rows[4][1280];
-        for (int y = 0; y < H; y++) {
-            for (int x = 0; x < 1280; x++) rows[0][x] = pixels[y][x / 4];
-            for (int r = 1; r < 4; r++) memcpy(rows[r], rows[0], sizeof rows[0]);
-            xsdk_texture_upload_rows(&dst, 0, y * 4, 4, rows, sizeof rows[0]);
+        // Upload a stripe per call: xSDK issues a PowerPC sync on each
+        // upload. Avoid a barrier for every source scanline.
+        enum { STRIPE = 8 };
+        static uint32_t rows[4 * STRIPE][1280];
+        for (int y = 0; y < H; y += STRIPE) {
+            int n = H - y < STRIPE ? H - y : STRIPE;
+            for (int j = 0; j < n; j++) {
+                uint32_t *row = rows[4 * j];
+                for (int x = 0; x < W; x++) {
+                    uint32_t p = pixels[y + j][x];
+                    row[4*x] = row[4*x+1] = row[4*x+2] = row[4*x+3] = p;
+                }
+                for (int r = 1; r < 4; r++) memcpy(rows[4*j+r], row, sizeof rows[0]);
+            }
+            xsdk_texture_upload_rows(&dst, 0, y * 4, n * 4, rows, sizeof rows[0]);
         }
     } else {
         // The kernel display mode may be 640x480 on an interlaced output.
@@ -161,7 +171,7 @@ static float sat(float a) {
 }
 extern uint8_t gVertexColor[3]; // gfx_pc: ambient light-map modulation
 
-static bool shade(int x, int y, const float *vary) {
+static bool shade(int x, int y, const float *vary, uint32_t *pixel) {
     struct CCFeatures *f = &active->f;
     float reg[SHADER_NOISE + 1][4] = { { 0 } };
     const float *light_uv = vary + 2 * (f->used_textures[0] + f->used_textures[1]) + 4 * f->opt_fog;
@@ -210,7 +220,7 @@ static bool shade(int x, int y, const float *vary) {
         if (a <= 0.3f) return false;
         a = 1.0f;
     }
-    uint32_t old = pixels[y][x], result = 255;
+    uint32_t old = *pixel, result = 255;
     for (int k = 0; k < 3; k++) {
         float c = color[k];
         if (f->opt_fog)
@@ -220,7 +230,7 @@ static bool shade(int x, int y, const float *vary) {
             c = c * a + ((old >> shift) & 255) * ((1 - a) / 255.f);
         result |= (uint32_t) (sat(c) * 255.f) << shift;
     }
-    pixels[y][x] = result;
+    *pixel = result;
     return true;
 }
 static void rasterize(const float *buf, size_t stride) {
@@ -241,23 +251,42 @@ static void rasterize(const float *buf, size_t stride) {
     int right = fminf(fminf(W, (sc[0] + sc[2]) * scale_x), ceilf(fmaxf(x[0], fmaxf(x[1], x[2]))));
     int top = fmaxf(fmaxf(0, H - (sc[1] + sc[3]) * scale_y), floorf(fminf(y[0], fminf(y[1], y[2]))));
     int bottom = fminf(fminf(H, H - sc[1] * scale_y), ceilf(fmaxf(y[0], fmaxf(y[1], y[2]))));
+    if (left >= right || top >= bottom) return;
+    // Clears and flat, opaque panels need the combiner once per triangle,
+    // not once per covered pixel. Keep normal coverage and depth testing.
+    const size_t attr_bytes = (stride - 4) * sizeof(*buf);
+    const bool flat = !blend && !active->f.opt_noise && !active->f.used_textures[0] && !active->f.used_textures[1]
+                      && !memcmp(buf+4, buf+stride+4, attr_bytes) && !memcmp(buf+4, buf+2*stride+4, attr_bytes);
+    uint32_t flat_color = 0;
+    if (flat && !shade(0, 0, buf + 4, &flat_color)) return;
+    const float inv_area = 1.0f / area;
+    const bool affine = q[0] == q[1] && q[0] == q[2];
     for (int j = top; j < bottom; j++)
         for (int i = left; i < right; i++) {
             float dx = i + .5f - x[0], dy = j + .5f - y[0];
-            float b = (dx * (y[2] - y[0]) - dy * (x[2] - x[0])) / area,
-                  c = ((x[1] - x[0]) * dy - (y[1] - y[0]) * dx) / area, a = 1 - b - c;
+            float b = (dx * (y[2] - y[0]) - dy * (x[2] - x[0])) * inv_area,
+                  c = ((x[1] - x[0]) * dy - (y[1] - y[0]) * dx) * inv_area, a = 1 - b - c;
             if (a < 0 || b < 0 || c < 0)
                 continue;
             float d = a * z[0] + b * z[1] + c * z[2] - (decal ? .0001f : 0);
             if (d < 0 || d > 1 || (test_z && d > depth[j][i]))
                 continue;
-            a *= q[0];
-            b *= q[1];
-            c *= q[2];
-            float norm = 1 / (a + b + c), vary[44];
+            if (flat) {
+                pixels[j][i] = flat_color;
+                if (test_z && write_z) depth[j][i] = d;
+                continue;
+            }
+            // Ortho HUD/text triangles have constant w. Their barycentric
+            // weights already sum to one; no perspective division is needed.
+            if (!affine) {
+                a *= q[0]; b *= q[1]; c *= q[2];
+                float norm = 1 / (a + b + c);
+                a *= norm; b *= norm; c *= norm;
+            }
+            float vary[44];
             for (size_t k = 4; k < stride; k++)
-                vary[k - 4] = (a * buf[k] + b * buf[stride + k] + c * buf[stride * 2 + k]) * norm;
-            if (shade(i, j, vary) && test_z && write_z)
+                vary[k - 4] = a * buf[k] + b * buf[stride + k] + c * buf[stride * 2 + k];
+            if (shade(i, j, vary, &pixels[j][i]) && test_z && write_z)
                 depth[j][i] = d;
         }
 }

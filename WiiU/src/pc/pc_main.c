@@ -276,7 +276,13 @@ static u32 get_display_refresh_rate(void) {
 static u32 get_target_refresh_rate(void) {
     if (configFramerateMode == RRM_MANUAL) { return configFrameLimit; }
     if (configFramerateMode == RRM_UNLIMITED) { return 3000; } // Has no effect
+#ifdef TARGET_XBOX360
+    // Auto: render once per simulation tick rather than spending CPU time on
+    // intermediate software frames. Manual frame limits remain available.
+    return FRAMERATE;
+#else
     return get_display_refresh_rate();
+#endif
 }
 
 static void select_graphics_backend(void) {
