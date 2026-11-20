@@ -51,6 +51,11 @@ jobs:
           key: xsdk-ubuntu24-v1-${{ env.XSDK_REF }}
       - name: Enable VdSwap fallback for emulated displays
         run: git -C "$XSDK_ROOT" apply "$GITHUB_WORKSPACE/xbox360-port/xsdk-vdswap.patch"
+      - name: Compile Fast3D vertex and pixel programs with the pinned host Xenos compiler
+        run: |
+          make -C "$XSDK_ROOT" -j3 WARNINGS= build/host/libxsc.so
+          cc -std=gnu17 -O2 -I"$XSDK_ROOT/include" xbox360-port/tests/gpu_combiner_test.c -L"$XSDK_ROOT/build/host" -Wl,-rpath,"$XSDK_ROOT/build/host" -lxsc -lm -o "$RUNNER_TEMP/combiner-test"
+          "$RUNNER_TEMP/combiner-test"
       - name: Build xSDK title runtime
         run: make -C "$XSDK_ROOT" -j3 build/libxsdk.a
       - uses: actions/checkout@v4

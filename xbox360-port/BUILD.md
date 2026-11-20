@@ -15,7 +15,9 @@ make -C "$game" TARGET_XBOX360=1 all
 
 The target links the engine ELF with xSDK's title startup and packages it with `elf2xex.py`. Intended output: `build/us_xbox360/default.xex`, with resources beside the XEX on a writable `game:/` mount. Do not set `TARGET_WII_U` at the same time. Host asset tools are native; title objects require the xSDK ABI compiler, not devkitPPC. SDK headers alone are not sufficient. Remaining engine dependencies (including SDL2 interfaces and zlib) must be available for the **target**, not linked from the Linux host; `EXTRA_INCLUDES` and `XBOX_PORT_LIBS` are the include/library inputs. A complete dependency sysroot is not supplied.
 
-`gfx_xbox360.c` consumes the game's Fast3D triangle batches, evaluates the combiner, and writes a 320×180 software color buffer. The window backend expands it into the acquired tiled 720p front buffer. This is a CPU renderer, not a port of GX2 shaders. Performance, light-map effects, visual parity, console startup, mod loading and saving remain unverified. CoopNet is off by default.
+The default renderer sends Fast3D batches to the Xenos GPU at the presentation resolution. It compiles a vertex/pixel program on first use of each combiner and keeps it for subsequent draws. A new shader may hitch on first use. Vertex memory rotates through fenced blocks; texture pages are recycled only after outstanding draws finish. The title log should say `xbox renderer: native Xenos`. A GPU allocation or program setup failure can switch the title to software; look for `xbox GPU:` in `default.log`.
+
+For a visual comparison or if the native path shows no picture, place an empty `software-renderer.txt` beside `default.xex` and restart. Delete the file to use the GPU again. The CPU path is much slower on hardware. Use `xbox slow tick` log lines to compare the same scene; their absence is not a measured frame rate. CoopNet is off by default.
 
 ### Reproducing the Actions build
 

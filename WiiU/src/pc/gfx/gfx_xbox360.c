@@ -1,4 +1,4 @@
-/* Fast3D software rasterizer for the xSDK tiled scanout. Coordinates passed by
+/* Native Xenos Fast3D renderer with a software fallback for tiled scanout. Coordinates passed by
  * gfx_pc use GL's bottom-left viewport origin; scanout rows run top-down. */
 #ifdef TARGET_XBOX360
 #include "gfx_rendering_api.h"
@@ -6,6 +6,9 @@
 #include "gfx_xbox360_window.h"
 #include <xsdk/present.h>
 #include <xsdk/log.h>
+#include <xsdk/gpu.h>
+#include <stdio.h>
+#include "xbox_combiner.h"
 #include <xsdk/texture.h>
 #include <math.h>
 #include <stdlib.h>
@@ -27,11 +30,16 @@ static float scale_x, scale_y;
 static bool test_z, write_z, decal, blend;
 struct ShaderProgram {
     struct CCFeatures f;
+    XsdkXscShader compiled[2];
+    XsdkShader gpu[2];
+    bool ready;
+    unsigned stride;
     uint64_t hash;
     struct ShaderProgram *next;
 };
 static struct ShaderProgram *programs, *active;
 struct Texture {
+    XsdkTexture gpu;
     uint8_t *data;
     int w, h;
     unsigned wrap[2];
@@ -39,8 +47,14 @@ struct Texture {
 };
 static struct Texture *textures;
 static unsigned count, selected[2], tile;
+extern uint8_t gVertexColor[3];
+#include "xbox_gpu_impl.h"
 extern void xbox_set_scanout(void (*fn)(uint32_t, uint32_t, uint32_t));
 static void scanout(uint32_t addr, uint32_t w, uint32_t h) {
+    if (native) {
+        xsdk_gpu_resolve(addr,w,h,0xff000000u);
+        return;
+    }
     XsdkTexture dst;
     if (!w || !h || w > XSDK_TEXTURE_MAX_SIZE || h > XSDK_TEXTURE_MAX_SIZE
         || !NT_SUCCESS(xsdk_texture_init(&dst, XSDK_FORMAT_A8R8G8B8, w, h, 1, true)))
@@ -146,6 +160,7 @@ static void upload(const uint8_t *buf, int w, int h) {
     if (!p)
         abort();
     memcpy(p, buf, len);
+    t->gpu.texels = NULL; // old storage lives until its fenced page is reclaimed
     t->data = p; t->w = w; t->h = h;
 }
 static void sampler(int t, bool l, uint32_t s, uint32_t v) {
@@ -338,6 +353,7 @@ static void rasterize(const float *buf, size_t stride) {
         }
 }
 
+static void start(void);
 static void draw(float *buf, size_t len, size_t tris) {
     if (!active || !tris)
         return;
@@ -346,6 +362,13 @@ static void draw(float *buf, size_t len, size_t tris) {
                           + 2 * f->opt_light_map + (3 + f->opt_alpha) * f->num_inputs;
     if (stride > 48 || len / stride / 3 != tris || len % (stride * 3))
         return;
+    if (native) {
+        active->stride = stride * sizeof(float);
+        if (gpu_draw_batch(buf,len)) return;
+        xsdk_log_write("xbox GPU: batch setup failed; switching to software rendering");
+        native = false;
+        start();
+    }
     for (size_t t = 0; t < tris; t++, buf += 3 * stride) {
         if (buf[2] >= 0 && buf[stride + 2] >= 0 && buf[2 * stride + 2] >= 0) {
             rasterize(buf, stride);
@@ -386,6 +409,7 @@ static void resize(void) {
     uint32_t w, h;
     gfx_xbox360_window.get_dimensions(&w, &h);
     if (!w || !h) return;
+    target_w=w; target_h=h;
     scale_x = (float)W / w;
     scale_y = (float)H / h;
     viewport(0, 0, w, h);
@@ -393,9 +417,21 @@ static void resize(void) {
 }
 static void init(void) {
     resize();
+    FILE *force = fopen("game:/software-renderer.txt","rb");
+    if (force) fclose(force);
+    else if (target_w && target_h) vertex_mem=xsdk_gpu_alloc(VB_BLOCKS*VB_BLOCK);
+    native=vertex_mem!=NULL;
+    if(native) {
+        vertex_base=xsdk_gpu_address(vertex_mem);
+        block=used=0;
+        memset(fences,0,sizeof fences);
+    }
+    xsdk_log_write("xbox renderer: %s",native?"native Xenos":"software");
     xbox_set_scanout(scanout);
 }
 static void start(void) {
+    bound=NULL; state_valid=false;
+    if (native) return;
     memset(fine, 0, sizeof fine);
     font_pass = false;
     memset(pixels, 0, sizeof pixels);
@@ -405,11 +441,19 @@ static void start(void) {
 }
 static void shutdown(void) {
     xbox_set_scanout(NULL);
+    // GPU may still fetch submitted vertices, textures and shader microcode.
+    bool idle=!vertex_mem || retire_pages();
+    if (vertex_mem && idle) xsdk_gpu_free(vertex_mem);
+    vertex_mem=NULL; native=false;
     while (count)
         free(textures[--count].data);
     free(textures);
     textures = NULL;
     while (programs) {
+        if (idle) for (unsigned i=0;i<2;i++) {
+            if(programs->gpu[i].microcode) xsdk_shader_free(&programs->gpu[i]);
+            xsdk_xsc_free(&programs->compiled[i]);
+        }
         active = programs->next;
         free(programs);
         programs = active;
@@ -430,7 +474,7 @@ static void set_blend(bool v) {
 static void noop(void) {
 }
 static const char *name(void) {
-    return "Xbox 360 software";
+    return native ? "Xbox 360 Xenos" : "Xbox 360 software";
 }
 struct GfxRenderingAPI gfx_xbox360_api = { zero_one,  unload,    load,       create,   lookup,
                                            info,      alloc_tex, select_tex, upload,   sampler,
