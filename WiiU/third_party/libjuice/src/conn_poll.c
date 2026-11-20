@@ -14,6 +14,9 @@
 #include "udp.h"
 
 #include <assert.h>
+#ifdef __XSDK__
+#include <time.h>
+#endif
 #include <stdbool.h>
 #include <string.h>
 
@@ -332,8 +335,14 @@ int conn_poll_run(conn_registry_t *registry) {
 				has_socket = true;
 		}
 		if (!has_socket) {
-			if (timediff > 0)
+			if (timediff > 0) {
+#ifdef __XSDK__
+				const struct timespec delay = {0, (long)timediff * 1000000L};
+				nanosleep(&delay, NULL);
+#else
 				usleep((useconds_t)timediff * 1000);
+#endif
+			}
 			if (conn_poll_process(registry, &pfds) < 0)
 				break;
 			continue;

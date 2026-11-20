@@ -33,6 +33,14 @@ static int random_bytes(void *buf, size_t size) {
 	return 0;
 }
 
+#elif defined(__XSDK__)
+#include <xsdk/kernel.h>
+
+static int random_bytes(void *buf, size_t size) {
+	XeCryptRandom(buf, size);
+	return 0;
+}
+
 #elif defined(_WIN32)
 
 #ifndef _WIN32_WINNT

@@ -17,7 +17,11 @@ The target links the engine ELF with xSDK's title startup and packages it with `
 
 The default renderer sends Fast3D batches to the Xenos GPU at the presentation resolution. It compiles a vertex/pixel program on first use of each combiner and keeps it for subsequent draws. A new shader may hitch on first use. Vertex memory rotates through fenced blocks; texture pages are recycled only after outstanding draws finish. The title log should say `xbox renderer: native Xenos`. A GPU allocation or program setup failure can switch the title to software; look for `xbox GPU:` in `default.log`.
 
-For a visual comparison or if the native path shows no picture, place an empty `software-renderer.txt` beside `default.xex` and restart. Delete the file to use the GPU again. The CPU path is much slower on hardware. Use `xbox slow tick` log lines to compare the same scene; their absence is not a measured frame rate. CoopNet is off by default.
+For a visual comparison or if the native path shows no picture, place an empty `software-renderer.txt` beside `default.xex` and restart. Delete the file to use the GPU again. The CPU path is much slower on hardware. Use `xbox slow tick` log lines to compare the same scene; their absence is not a measured frame rate.
+
+### CoopNet multiplayer
+
+CoopNet is built into the Xbox game by default. On **Host**, select **CoopNet** and set the player limit to at least two. On the second device, use **Join** and browse the Realism64 lobbies. Use matching game versions and mods. Existing settings may still select Direct Connection. Xbox uses IPv4 and requires network access to the configured CoopNet service and the ICE endpoints it supplies. Cross-compilation alone does not verify matchmaking or NAT traversal.
 
 ### Reproducing the Actions build
 
