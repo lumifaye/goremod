@@ -125,6 +125,6 @@ void geo_layout_cmd_node_switch_case_ext(void);
 void geo_layout_cmd_node_generated_ext(void);
 void geo_layout_cmd_bone(void);
 
-struct GraphNode *process_geo_layout(struct DynamicPool *a0, void *segptr);
+struct GraphNode *process_geo_layout(struct DynamicPool *a0, void *segptr, bool binaryActor);
 
 #endif // GEO_LAYOUT_H

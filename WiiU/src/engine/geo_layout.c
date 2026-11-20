@@ -891,7 +891,7 @@ void geo_layout_cmd_bone(void) {
     gGeoLayoutCommand = (u8 *) cmdPos;
 }
 
-struct GraphNode *process_geo_layout(struct DynamicPool *pool, void *segptr) {
+struct GraphNode *process_geo_layout(struct DynamicPool *pool, void *segptr, bool binaryActor) {
     // set by register_scene_graph_node when gCurGraphNodeIndex is 0
     // and gCurRootGraphNode is NULL
     gCurRootGraphNode = NULL;
@@ -905,7 +905,7 @@ struct GraphNode *process_geo_layout(struct DynamicPool *pool, void *segptr) {
     gGeoLayoutReturnIndex = 2; // stack index is often copied here?
 
     gGeoLayoutCommand = segmented_to_virtual(segptr);
-    gGeoLayoutDynosLittleEndian = dynos_level_is_custom_geo_layout_ptr(gGeoLayoutCommand);
+    gGeoLayoutDynosLittleEndian = binaryActor || dynos_level_is_custom_geo_layout_ptr(gGeoLayoutCommand);
 
     gGraphNodePool = pool;
 
