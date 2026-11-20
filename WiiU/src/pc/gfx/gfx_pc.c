@@ -2357,6 +2357,15 @@ static void OPTIMIZE_O3 djui_gfx_dp_execute_override(void) {
 
 static void OPTIMIZE_O3 djui_gfx_dp_execute_djui(uint32_t opcode) {
     switch (opcode) {
+        #ifdef TARGET_XBOX360
+        case XBOX_FONT_BEGIN:
+        case XBOX_FONT_END: {
+            extern void xbox_font_pass(bool enabled);
+            gfx_flush();
+            xbox_font_pass(opcode == XBOX_FONT_BEGIN);
+            break;
+        }
+#endif
         case G_TEXOVERRIDE_DJUI: djui_gfx_dp_execute_override(); break;
         case G_TEXCLIP_DJUI:     djui_gfx_dp_execute_clipping(); break;
     }

@@ -124,6 +124,12 @@
         _g->words.w1 =  __gsSP1Triangle_w1f(v10, v11, v12, flag1); 	\
 }
 
+/* Private subcommands of G_EXECUTE_DJUI, not display-list opcodes. */
+#ifdef TARGET_XBOX360
+#define XBOX_FONT_BEGIN 0x100
+#define XBOX_FONT_END   0x101
+#endif
+
 #define gsSPExecuteDjui(word)                                   \
 {{                                                              \
     _SHIFTL(G_EXECUTE_DJUI, 24, 8), (unsigned int)(word)        \

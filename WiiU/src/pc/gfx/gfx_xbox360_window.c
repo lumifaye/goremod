@@ -38,7 +38,15 @@ static void xbox_dimensions(uint32_t *w,uint32_t *h) { if(w)*w=display_width; if
 static void xbox_events(void) {}
 static bool xbox_start_frame(void) {
     if (!display_opened || frame_open) return false;
-    NTSTATUS status=xsdk_present_begin(&frame_address,5000);
+    // Gameplay also feeds audio on this thread. Never wait seconds for a
+    // late vblank/fence: leave the old frame displayed and retry next tick.
+    NTSTATUS status=xsdk_present_begin(&frame_address,0);
+    if (status == STATUS_IO_TIMEOUT) {
+        static unsigned misses;
+        if (++misses && !(misses & (misses - 1)))
+            xsdk_log_write("xbox present: buffer busy, skipped %u frames so far", misses);
+        return false;
+    }
     if (!NT_SUCCESS(status)) { xsdk_log_write("xbox window: begin frame failed: %08X",(unsigned)status); return false; }
     frame_open = true;
     xsdk_gpu_set_target(display_width, display_height);

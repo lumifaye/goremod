@@ -171,6 +171,9 @@ void djui_gfx_render_texture_tile(const Texture* texture, u32 w, u32 h, u8 fmt, 
 }
 
 void djui_gfx_render_texture_font_begin() {
+#ifdef TARGET_XBOX360
+    *(gDisplayListHead++) = (Gfx) gsSPExecuteDjui(XBOX_FONT_BEGIN);
+#endif
     gSPClearGeometryMode(gDisplayListHead++, G_LIGHTING | G_CULL_BOTH);
     gDPSetCombineMode(gDisplayListHead++, G_CC_FADEA, G_CC_MODULATERGBA_PRIM2);
     gDPSetCycleType(gDisplayListHead++, G_CYC_2CYCLE);
@@ -198,6 +201,9 @@ void djui_gfx_render_texture_font(const Texture* texture, u32 w, u32 h, u8 fmt, 
 }
 
 void djui_gfx_render_texture_font_end() {
+#ifdef TARGET_XBOX360
+    *(gDisplayListHead++) = (Gfx) gsSPExecuteDjui(XBOX_FONT_END);
+#endif
     gSPTexture(gDisplayListHead++, 0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_OFF);
     gDPSetCombineMode(gDisplayListHead++, G_CC_SHADE, G_CC_SHADE);
     gDPSetCycleType(gDisplayListHead++, G_CYC_1CYCLE);
@@ -205,6 +211,9 @@ void djui_gfx_render_texture_font_end() {
 }
 
 void djui_gfx_render_texture_tile_font_begin() {
+#ifdef TARGET_XBOX360
+    *(gDisplayListHead++) = (Gfx) gsSPExecuteDjui(XBOX_FONT_BEGIN);
+#endif
     gSPClearGeometryMode(gDisplayListHead++, G_LIGHTING | G_CULL_BOTH);
     gDPSetCombineMode(gDisplayListHead++, G_CC_FADEA, G_CC_MODULATERGBA_PRIM2);
     gDPSetCycleType(gDisplayListHead++, G_CYC_2CYCLE);
@@ -250,6 +259,9 @@ void djui_gfx_render_texture_tile_font(const Texture* texture, u32 w, u32 h, u8 
 }
 
 void djui_gfx_render_texture_tile_font_end() {
+#ifdef TARGET_XBOX360
+    *(gDisplayListHead++) = (Gfx) gsSPExecuteDjui(XBOX_FONT_END);
+#endif
     gSPTexture(gDisplayListHead++, 0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_OFF);
     gDPSetCombineMode(gDisplayListHead++, G_CC_SHADE, G_CC_SHADE);
     gDPSetCycleType(gDisplayListHead++, G_CYC_1CYCLE);

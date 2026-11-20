@@ -46,7 +46,9 @@ void update_all_mario_stars(void) {
 }
 
 static void _clock_gettime(struct timespec* clock_time) {
-#if !defined _POSIX_MONOTONIC_CLOCK || _POSIX_MONOTONIC_CLOCK < 0
+#ifdef TARGET_XBOX360
+    clock_gettime(CLOCK_MONOTONIC, clock_time); // Xenon time base, independent of dashboard time
+#elif !defined _POSIX_MONOTONIC_CLOCK || _POSIX_MONOTONIC_CLOCK < 0
     clock_gettime(CLOCK_REALTIME, clock_time);
 #elif _POSIX_MONOTONIC_CLOCK > 0
     clock_gettime(CLOCK_MONOTONIC, clock_time);

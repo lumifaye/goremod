@@ -51,6 +51,7 @@
 #include "pc/mods/mods.h"
 #include "pc/wiiu_network.h"
 #ifdef TARGET_XBOX360
+#include <xsdk/log.h>
 #include "gfx/gfx_xbox360_window.h"
 #include "audio/audio_xbox360.h"
 extern struct GfxRenderingAPI gfx_xbox360_api;
@@ -342,6 +343,9 @@ static void select_graphics_backend(void) {
     }
 }
 
+#ifdef TARGET_XBOX360
+static double xboxTickStart, xboxAudioStart, xboxRenderStart;
+#endif
 void produce_interpolation_frames_and_delay(void) {
     u32 refreshRate = get_target_refresh_rate();
 
@@ -376,6 +380,9 @@ void produce_interpolation_frames_and_delay(void) {
         gFramePercentage = clamp((curTime - sFrameTimeStart) / sFrameTime, 0.f, 1.f);
         gRenderingDelta = delta;
 
+#ifdef TARGET_XBOX360
+        double drawStart = clock_elapsed_f64();
+#endif
         gfx_start_frame();
         if (!gSkipInterpolationTitleScreen) { patch_interpolations(delta); }
         send_display_list(gGfxSPTask);
@@ -383,7 +390,22 @@ void produce_interpolation_frames_and_delay(void) {
         gfx_end_frame();
 #else
         gfx_end_frame_render();
+#ifdef TARGET_XBOX360
+        double drawEnd = clock_elapsed_f64();
+#endif
         gfx_display_frame();
+#ifdef TARGET_XBOX360
+        // At most one slow-frame report per ten seconds, with no per-draw I/O.
+        static double lastReport = -10;
+        double end = clock_elapsed_f64();
+        if (end - xboxTickStart >= 0.10 && end - lastReport >= 10) {
+            lastReport = end;
+            xsdk_log_write("xbox slow tick (ms): update=%u audio=%u interp=%u draw=%u scanout/swap=%u",
+                (unsigned)((xboxAudioStart-xboxTickStart)*1000), (unsigned)((xboxRenderStart-xboxAudioStart)*1000),
+                (unsigned)((drawStart-xboxRenderStart)*1000), (unsigned)((drawEnd-drawStart)*1000),
+                (unsigned)((end-drawEnd)*1000));
+        }
+#endif
 #endif
 
         // delay if our framerate is capped
@@ -505,6 +527,9 @@ void *audio_thread(UNUSED void *arg) {
 }
 
 void produce_one_frame(void) {
+#ifdef TARGET_XBOX360
+    xboxTickStart = clock_elapsed_f64();
+#endif
 #ifdef TARGET_WII_U
     static bool sLoggedFirstProduceOneFrame = false;
     const bool traceFirstFrame = !sLoggedFirstProduceOneFrame;
@@ -537,6 +562,9 @@ void produce_one_frame(void) {
     if (traceFirstFrame) { OSReport("pc_main: frame stage smlua_update end\n"); }
 #endif
 
+#ifdef TARGET_XBOX360
+    xboxAudioStart = clock_elapsed_f64();
+#endif
     // If we aren't threaded
     if (gAudioThread.state == INVALID) {
 #ifdef TARGET_WII_U
@@ -550,6 +578,9 @@ void produce_one_frame(void) {
 
 #ifdef TARGET_WII_U
     if (traceFirstFrame) { OSReport("pc_main: frame stage produce_interpolation_frames_and_delay begin\n"); }
+#endif
+#ifdef TARGET_XBOX360
+    xboxRenderStart = clock_elapsed_f64();
 #endif
     CTX_EXTENT(CTX_RENDER, produce_interpolation_frames_and_delay);
 #ifdef TARGET_WII_U

@@ -26,6 +26,11 @@ jobs:
           ref: ${{ env.XSDK_REF }}
           path: .ci/xsdk
           persist-credentials: false
+      - name: Exercise Xbox font raster and busy-buffer recovery
+        run: |
+          cc -std=gnu17 -O2 -DTARGET_XBOX360 -I"$XSDK_ROOT/include" -ffunction-sections -fdata-sections xbox360-port/tests/font_raster_test.c -Wl,--gc-sections -lm -o "$RUNNER_TEMP/font-test"
+          "$RUNNER_TEMP/font-test"
+          bash xbox360-port/tests/run_window_test.sh
       - name: Install host prerequisites
         run: |
           sudo apt-get update -qq

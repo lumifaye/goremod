@@ -3,6 +3,7 @@
 #include <stdint.h>
 typedef int32_t NTSTATUS;
 #define STATUS_SUCCESS ((NTSTATUS)0)
+#define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5)
 #define STATUS_TIMEOUT ((NTSTATUS)0x00000102)
 #define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001)
 #define NT_SUCCESS(status) ((NTSTATUS)(status) >= 0)
