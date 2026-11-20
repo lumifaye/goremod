@@ -126,7 +126,9 @@ uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId) {
 }
 #else
 
+#ifndef __XSDK__
 #include <sys/ioctl.h>
+#endif
 #ifdef __WIIU__
 // Wii U: no list of network interfaces (net/if.h, ifaddrs.h); the console tells its own addresses.
 #include <nsysnet/netconfig.h>
@@ -167,6 +169,7 @@ void SocketSetOptions(int aSocket) {
     }
 }
 
+#ifndef __XSDK__
 void SocketLimitBuffer(int aSocket, int64_t* amount) {
     SOCKET_RESET_ERROR();
     int bufferLength = 0;
@@ -179,7 +182,13 @@ void SocketLimitBuffer(int aSocket, int64_t* amount) {
     }
 }
 
-#ifdef __WIIU__
+#endif
+
+#ifdef __XSDK__
+uint64_t SocketGetInfoBits(int, uint64_t fallbackId) {
+    return SocketAddHash(SOCKET_DEFAULT_INFO + (fallbackId & 0x0000FFFFFFFFFFFFULL));
+}
+#elif defined(__WIIU__)
 uint64_t SocketGetInfoBits(int aSocket, uint64_t fallbackId) {
     (void)aSocket;
     uint64_t info = SOCKET_DEFAULT_INFO;

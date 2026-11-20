@@ -28,6 +28,16 @@ bool GetAddrFromDomain(const std::string& domain, in_addr_t* address) {
         *address = numeric.s_addr;
         return true;
     }
+#ifdef __XSDK__
+    struct addrinfo hints = {}, *result = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(domain.c_str(), nullptr, &hints, &result) != 0) return false;
+    bool ok = result && result->ai_addr && result->ai_addrlen >= sizeof(sockaddr_in);
+    if (ok) *address = reinterpret_cast<sockaddr_in*>(result->ai_addr)->sin_addr.s_addr;
+    freeaddrinfo(result);
+    return ok;
+#else
 #ifdef __WIIU__
     // WUT's gethostbyname wrapper also calls get_h_errno, which Cemu lacks.
     // This caller only needs the returned hostent, not the resolver error code.
@@ -39,6 +49,7 @@ bool GetAddrFromDomain(const std::string& domain, in_addr_t* address) {
         !he->h_addr_list || !he->h_addr_list[0]) { return false; }
     memcpy(address, he->h_addr_list[0], sizeof(*address));
     return true;
+#endif
 }
 
 static void _clock_gettime(struct timespec* clock_time) {

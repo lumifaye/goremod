@@ -102,7 +102,7 @@ void Connection::Receive() {
         return;
     }
 
-#ifndef __WIIU__
+#if !defined(__WIIU__) && !defined(__XSDK__)
     // Wii U recv is non-blocking; Cemu does not implement the SO_RXDATA
     // query behind FIONREAD, so limiting by that result can yield false zero.
     SocketLimitBuffer(mSocket, &remaining);

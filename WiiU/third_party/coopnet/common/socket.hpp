@@ -37,6 +37,11 @@
 
 #endif
 
+#ifdef __XSDK__
+// SocketSetOptions sets O_NONBLOCK on the descriptor.
+#define MSG_DONTWAIT 0
+#endif
+
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif

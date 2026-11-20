@@ -43,7 +43,6 @@ ifeq ($(TARGET_XBOX360),1)
   CROSS := powerpc-xsdk-elf-
   XBOX_C_STD := -std=gnu17
   TARGET_BITS := 32
-  COOPNET := 0
 endif
 # Strip debug symbols from the Wii U ELF before RPX conversion.
 WIIU_STRIP ?= 0
@@ -1050,8 +1049,8 @@ endif
 # CoopNet
 COOPNET_LIBS :=
 ifeq ($(COOPNET),1)
-  ifeq ($(TARGET_WII_U),1)
-    # Wii U builds use in-tree coopnet/libjuice sources.
+  ifeq ($(CONSOLE_BUILD),1)
+    # Console builds use in-tree coopnet/libjuice sources.
   else ifeq ($(WINDOWS_BUILD),1)
     ifeq ($(TARGET_BITS), 32)
       LDFLAGS += -Llib/coopnet/win32 -l:libcoopnet.a -l:libjuice.a -lbcrypt -liphlpapi
@@ -1181,7 +1180,7 @@ endif
 ifeq ($(COOPNET),1)
   CC_CHECK_CFLAGS += -DCOOPNET
   CFLAGS += -DCOOPNET
-  ifeq ($(TARGET_WII_U),1)
+  ifeq ($(CONSOLE_BUILD),1)
     CFLAGS += -DJUICE_STATIC -DNO_SERVER
   endif
 endif
@@ -1807,6 +1806,8 @@ ifeq ($(TARGET_WII_U),1)
   # reduce emulator crash risk in large DynOS custom stages.
   $(BUILD_DIR)/src/engine/surface_collision.o: CFLAGS += -fno-fast-math -fno-unsafe-math-optimizations -fno-finite-math-only
 
+endif
+ifeq ($(CONSOLE_BUILD),1)
   # CoopNet common uses modern C++ (filesystem and chrono helpers).
   $(BUILD_DIR)/third_party/coopnet/common/%.o: CFLAGS += -std=gnu++17 -Wno-error -Wno-unused-function
   # libjuice is third-party network code; keep warnings non-fatal on Wii U.
