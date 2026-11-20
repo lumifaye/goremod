@@ -5,6 +5,8 @@
 #ifdef __WIIU__
 #include <coreinit/debug.h>
 #define WIIU_COOPNET_TRACE(...) OSReport(__VA_ARGS__)
+#elif defined(__XSDK__)
+#define WIIU_COOPNET_TRACE(...) printf(__VA_ARGS__)
 #else
 #define WIIU_COOPNET_TRACE(...) ((void)0)
 #endif
@@ -31,9 +33,9 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
 
     // setup a socket
     mConnection->mSocket = SocketInitialize(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(mConnection->mSocket <= 0)
+    if(mConnection->mSocket < 0)
     {
-        WIIU_COOPNET_TRACE("coopnet: socket creation failed\n");
+        WIIU_COOPNET_TRACE("coopnet: socket creation failed (errno=%d)\n", errno);
         LOG_ERROR("Socket failed");
         return false;
     }
@@ -52,6 +54,11 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
     WIIU_COOPNET_TRACE("coopnet: server resolved; preparing socket\n");
     mConnection->mAddress.sin_port = htons(aPort);
 
+#ifdef __XSDK__
+    char ip[INET_ADDRSTRLEN] = {};
+    inet_ntop(AF_INET, &mConnection->mAddress.sin_addr, ip, sizeof(ip));
+    printf("coopnet: connecting to %s:%u\n", ip, (unsigned)aPort);
+#endif
     SocketSetOptions(mConnection->mSocket);
     WIIU_COOPNET_TRACE("coopnet: socket options set\n");
     errno = 0;
@@ -72,12 +79,17 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
             FD_SET(mConnection->mSocket, &writeSet);
 
             // Use select to wait for the socket to become writable or timeout
+#ifdef __XSDK__
+            fd_set errorSet = writeSet;
+            int selectResult = select(mConnection->mSocket + 1, nullptr, &writeSet, &errorSet, &timeout);
+#else
             int selectResult = select(mConnection->mSocket + 1, nullptr, &writeSet, nullptr, &timeout);
+#endif
 #ifdef __XSDK__
             if (selectResult > 0) {
                 int error = 0;
                 socklen_t length = sizeof(error);
-                if (getsockopt(mConnection->mSocket, SOL_SOCKET, SO_ERROR, &error, &length) < 0 || error) {
+                if (getsockopt(mConnection->mSocket, SOL_SOCKET, SO_ERROR, &error, &length) < 0 || error || FD_ISSET(mConnection->mSocket, &errorSet)) {
                     printf("coopnet: signaling connect failed (%d)\n", error ? error : errno);
                     SocketClose(mConnection->mSocket);
                     return false;
@@ -85,16 +97,19 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
             }
 #endif
             if (selectResult == 0) {
+                WIIU_COOPNET_TRACE("coopnet: TCP connect timed out after 6 seconds\n");
                 LOG_ERROR("Connection timed out");
                 SocketClose(mConnection->mSocket);
                 return false;
             } else if (selectResult < 0) {
+                WIIU_COOPNET_TRACE("coopnet: TCP select failed (errno=%d)\n", errno);
                 LOG_ERROR("Error while waiting for connection");
                 SocketClose(mConnection->mSocket);
                 return false;
             }
         } else {
             // Other error occurred during connect
+            WIIU_COOPNET_TRACE("coopnet: TCP connect failed (errno=%d)\n", rc);
             LOG_ERROR("Connect failed: %u", rc);
             SocketClose(mConnection->mSocket);
             return false;

@@ -32,7 +32,11 @@ bool GetAddrFromDomain(const std::string& domain, in_addr_t* address) {
     struct addrinfo hints = {}, *result = nullptr;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(domain.c_str(), nullptr, &hints, &result) != 0) return false;
+    int rc = getaddrinfo(domain.c_str(), nullptr, &hints, &result);
+    if (rc != 0) {
+        printf("coopnet: DNS lookup for %s failed: %s (%d)\n", domain.c_str(), gai_strerror(rc), rc);
+        return false;
+    }
     bool ok = result && result->ai_addr && result->ai_addrlen >= sizeof(sockaddr_in);
     if (ok) *address = reinterpret_cast<sockaddr_in*>(result->ai_addr)->sin_addr.s_addr;
     freeaddrinfo(result);
