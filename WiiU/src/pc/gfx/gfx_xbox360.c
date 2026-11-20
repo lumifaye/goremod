@@ -5,6 +5,7 @@
 #include "gfx_cc.h"
 #include "gfx_xbox360_window.h"
 #include <xsdk/present.h>
+#include <xsdk/log.h>
 #include <xsdk/texture.h>
 #include <math.h>
 #include <stdlib.h>
@@ -56,6 +57,16 @@ static void scanout(uint32_t addr, uint32_t w, uint32_t h) {
             }
             xsdk_texture_upload_rows(&dst, 0, y, 1, row, w * sizeof(*row));
         }
+    }
+    // Distinguish an empty game frame from a presentation problem on the host.
+    static unsigned frame;
+    static bool saw_color;
+    if (!saw_color && ++frame && !(frame & (frame - 1))) {
+        for (unsigned y = 0; y < H && !saw_color; ++y)
+            for (unsigned x = 0; x < W; ++x)
+                if (pixels[y][x] >> 8) { saw_color = true; break; }
+        xsdk_log_write("xbox scanout: frame %u uploaded (%ux%u, %s)", frame, w, h,
+                       saw_color ? "contains color" : "black");
     }
 }
 static bool zero_one(void) {

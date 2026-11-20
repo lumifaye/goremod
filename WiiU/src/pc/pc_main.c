@@ -816,6 +816,12 @@ int main(int argc, char *argv[]) {
     } else {
         OSReport("pc_main: skipping loading_screen_reset (loading screen unused)\n");
     }
+#elif defined(TARGET_XBOX360)
+    // The reset submits a bootstrap display list via rendering_init -> gfx_run.
+    // Finish that frame before gameplay tries to acquire the next scanout buffer.
+    gfx_start_frame();
+    loading_screen_reset();
+    gfx_end_frame();
 #else
     loading_screen_reset();
 #endif
