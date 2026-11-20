@@ -64,7 +64,40 @@ void Connection::Disconnect(bool aIntentional) {
     }
 }
 
+#ifdef __XSDK__
+void Connection::QueuePacket(const uint8_t *data, size_t size) {
+    // Preserve framing on the non-blocking TCP stream across short writes.
+    if (mSendFailed) return;
+    if (size > 256 * 1024 - mPending.size()) {
+        printf("coopnet: signaling send queue full\n");
+        mSendFailed = true;
+        return;
+    }
+    mPending.insert(mPending.end(), data, data + size);
+    FlushPending();
+}
+
+void Connection::FlushPending() {
+    while (!mPending.empty() && !mSendFailed) {
+        ssize_t n = send(mSocket, mPending.data(), mPending.size(), 0);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0 && (errno == EWOULDBLOCK || errno == EAGAIN)) return;
+        if (n <= 0) {
+            printf("coopnet: signaling send failed (%d)\n", errno);
+            mSendFailed = true;
+            return;
+        }
+        mPending.erase(mPending.begin(), mPending.begin() + n);
+    }
+}
+#endif
+
 void Connection::Update() {
+#ifdef __XSDK__
+    if (!mActive) return;
+    FlushPending();
+    if (mSendFailed) { Disconnect(false); return; }
+#endif
     // send a packet with no important informations every 3 minutes,
     // just to keep the connection alive
     std::chrono::system_clock::time_point nowTp = std::chrono::system_clock::now();
@@ -127,6 +160,11 @@ void Connection::Receive() {
     // make sure connection is still active
     if (!mActive) { return; }
 
+#ifdef __XSDK__
+    if (ret < 0 && rc == EINTR) return;
+    if (ret == 0 || (ret < 0 && rc != EAGAIN && rc != EWOULDBLOCK))
+        printf("coopnet: signaling receive ended (bytes=%d errno=%d)\n", ret, rc);
+#endif
     // check for error
     if ((ret == -1) && (rc == SOCKET_EAGAIN || rc == SOCKET_EWOULDBLOCK)) {
         //LOG_INFO("[%" PRIu64 "] continue", mId);

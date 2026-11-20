@@ -214,6 +214,10 @@ void MPacket::Send(Connection& connection) {
         }
     }
 
+#ifdef __XSDK__
+    connection.QueuePacket(data, dataSize);
+    free(data);
+#else
     // send data buffer
     SOCKET_RESET_ERROR();
     int sent = sendto(connection.mSocket, (char*)&data[0], dataSize, MSG_NOSIGNAL, (const sockaddr*)&connection.mAddress, sizeof(struct sockaddr_in));
@@ -243,6 +247,7 @@ void MPacket::Send(Connection& connection) {
         LOG_ERROR("Error sending data, did not send all bytes (%d != %" PRIu64 ")!", sent, (uint64_t)dataSize);
     }
 
+#endif
     // update last send time
     std::chrono::system_clock::time_point nowTp = std::chrono::system_clock::now();
     connection.mLastSendTime = std::chrono::system_clock::to_time_t(nowTp);

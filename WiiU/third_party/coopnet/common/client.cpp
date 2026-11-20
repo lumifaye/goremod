@@ -73,6 +73,17 @@ bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_
 
             // Use select to wait for the socket to become writable or timeout
             int selectResult = select(mConnection->mSocket + 1, nullptr, &writeSet, nullptr, &timeout);
+#ifdef __XSDK__
+            if (selectResult > 0) {
+                int error = 0;
+                socklen_t length = sizeof(error);
+                if (getsockopt(mConnection->mSocket, SOL_SOCKET, SO_ERROR, &error, &length) < 0 || error) {
+                    printf("coopnet: signaling connect failed (%d)\n", error ? error : errno);
+                    SocketClose(mConnection->mSocket);
+                    return false;
+                }
+            }
+#endif
             if (selectResult == 0) {
                 LOG_ERROR("Connection timed out");
                 SocketClose(mConnection->mSocket);

@@ -72,9 +72,9 @@ f32 djui_gfx_get_scale(void) {
         u32 windowWidth, windowHeight;
         gfx_get_dimensions(&windowWidth, &windowHeight);
 #ifdef TARGET_XBOX360
-        // Couch distance: target a 480-unit UI canvas, but keep the 710-unit
-        // player list inside the safe width on a 4:3 display.
-        return clamp(MIN(windowHeight / 480.0f, windowWidth / 760.0f), 0.5f, 1.5f);
+        // At 720p use one screen pixel per UI unit. Permit a smaller
+        // scale on SD displays rather than clipping the bottom of menus.
+        return clamp(MIN(windowHeight / 720.0f, windowWidth / 960.0f), 0.25f, 1.0f);
 #else
         return clamp(round_to_multiple_f(((f32)windowHeight / (f32)SCREEN_HEIGHT) / 4.0f, 0.5f), 0.5f, 1.5f);
 #endif
