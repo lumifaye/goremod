@@ -67,6 +67,7 @@ local function model_index(o, first, last)
 end
 
 local function count_all_objects()
+    if type(gore_allocated_slots) == "function" then return gore_allocated_slots() end
     if obj_get_first == nil or obj_get_next == nil or NUM_OBJ_LISTS == nil then return nil end
     local count = 0
     for list = 0, NUM_OBJ_LISTS - 1 do
@@ -928,7 +929,6 @@ local function scan_level()
         end
         return freeSlots
     end
-    if #st.list > 0 then free_slots() end
 
     local unlimited = gOpt.blood_unlimited
     local conversions = 0

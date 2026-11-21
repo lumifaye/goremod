@@ -66,6 +66,7 @@ extern s32 gNumFindFloorMisses;
 extern UNUSED s32 unused_8033BEF8;
 extern s32 gUnknownWallCount;
 extern u32 gObjectCounter;
+extern u32 gAllocatedObjectSlots;
 
 struct NumTimesCalled {
     /*0x00*/ s16 floor;

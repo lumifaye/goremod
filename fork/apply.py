@@ -186,6 +186,11 @@ def object_limit(t):
               "    for (u32 i = 0; i < gObjectPoolHighWater; i++) { // [gore fork] was: every slot of the pool\n"
               "        gObjectPool[i].numSurfaces = 0;\n")
 
+    # A crowded previous level should not inflate every later frame's surface reset.
+    t.after("src/game/object_list_processor.c", "    init_free_object_list();\n",
+            "    for (u32 slot = 0; slot < gObjectPoolHighWater; ++slot) { gObjectPool[slot].numSurfaces = 0; }\n"
+            "    gObjectPoolHighWater = 0;\n")
+
     walk_guard = OBJECT_POOL + 5000
     t.replace("src/game/rendering_graph_node.c",
               "#define MAX_GRAPH_NODE_DEPTH 5000\n",

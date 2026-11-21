@@ -1784,8 +1784,6 @@ hook_event(HOOK_CHARACTER_SOUND, function(m, sound)
     local np = gNetworkPlayers[0]
 
     if sound == CHAR_SOUND_ON_FIRE then return 0 end
-    local o = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvPiranhaPlant)
-    local in_hitbox = obj_check_hitbox_overlap(m.marioObj, o)
 
     if m.action == ACT_BURNING_JUMP or m.action == ACT_BURNING_GROUND or m.action == ACT_BURNING_FALL then
         if sound == CHAR_SOUND_PUNCH_YAH or sound == CHAR_SOUND_YAH_WAH_HOO then
@@ -1793,7 +1791,10 @@ hook_event(HOOK_CHARACTER_SOUND, function(m, sound)
         end
     end
 
-    if sound == CHAR_SOUND_ATTACKED and in_hitbox then return 0 end
+    if sound == CHAR_SOUND_ATTACKED then
+        local plant = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvPiranhaPlant)
+        if plant and obj_check_hitbox_overlap(m.marioObj, plant) then return 0 end
+    end
     if sound == CHAR_SOUND_DYING and (s.headless or s.bottomless) then return 0 end
     if sound == CHAR_SOUND_WAAAOOOW and (m.action == ACT_THROWN_FORWARD or m.action == ACT_THROWN_BACKWARD) then return 0 end
     if sound == CHAR_SOUND_COUGHING1 and s.puking then return 0 end

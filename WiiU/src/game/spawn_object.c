@@ -20,6 +20,9 @@
 /**
  * An unused linked list struct that seems to have been replaced by ObjectNode.
  */
+// Slots allocated, including objects awaiting unload at the end of the frame.
+u32 gAllocatedObjectSlots;
+
 struct LinkedList {
     struct LinkedList *next;
     struct LinkedList *prev;
@@ -93,6 +96,8 @@ struct Object *try_allocate_object(struct ObjectNode *destList, struct ObjectNod
         // Remove from free list
         freeList->next = nextObj->next;
 
+        if (freeList == &gFreeObjectList) { ++gAllocatedObjectSlots; }
+
         // Insert at end of destination list
         nextObj->prev = destList->prev;
         nextObj->next = destList;
@@ -147,6 +152,7 @@ static void deallocate_object(struct ObjectNode *freeList, struct ObjectNode *ob
     // Insert at beginning of free list
     obj->next = freeList->next;
     freeList->next = obj;
+    if (freeList == &gFreeObjectList) { --gAllocatedObjectSlots; }
 }
 
 /**
@@ -154,6 +160,7 @@ static void deallocate_object(struct ObjectNode *freeList, struct ObjectNode *ob
  */
 void init_free_object_list(void) {
     s32 poolLength = OBJECT_POOL_CAPACITY;
+    gAllocatedObjectSlots = 0;
 
     // Add the first object in the pool to the free list
     struct Object *obj = &gObjectPool[0];

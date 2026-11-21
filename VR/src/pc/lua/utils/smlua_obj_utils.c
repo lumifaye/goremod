@@ -2,6 +2,7 @@
 #include "object_constants.h"
 #include "object_fields.h"
 #include "game/object_helpers.h"
+#include "game/object_list_processor.h"
 #include "game/interaction.h"
 #include "engine/math_util.h"
 
@@ -134,7 +135,7 @@ struct Object *obj_get_first(enum ObjectList objList) {
         struct Object *head = (struct Object *) &gObjectLists[objList];
         struct Object *obj = (struct Object *) head->header.next;
         while (obj != head) {
-            if (++sanityDepth > 10000) { break; }
+            if (++sanityDepth > OBJECT_POOL_CAPACITY) { break; }
             if (obj->activeFlags != ACTIVE_FLAG_DEACTIVATED) {
                 return obj;
             }
@@ -150,11 +151,11 @@ static struct Object *obj_get_next_internal(struct Object *o, enum ObjectList ob
         struct Object *head = (struct Object *) &gObjectLists[objList];
         struct Object *next = (struct Object *) o->header.next;
         while (next != head) {
-            if (++sanityDepth > 10000) { break; }
+            if (++sanityDepth > OBJECT_POOL_CAPACITY) { break; }
             if (next->activeFlags != ACTIVE_FLAG_DEACTIVATED) {
                 return next;
             }
-            next = (struct Object *) o->header.next;
+            next = (struct Object *) next->header.next;
         }
     }
     return NULL;
@@ -175,7 +176,7 @@ struct Object *obj_get_first_with_behavior_id(enum BehaviorId behaviorId) {
     if (behavior) {
         enum ObjectList objList = get_object_list_from_behavior(behavior);
         for (struct Object *obj = obj_get_first(objList); obj != NULL; obj = obj_get_next_internal(obj, objList)) {
-            if (++sanityDepth > 10000) { break; }
+            if (++sanityDepth > OBJECT_POOL_CAPACITY) { break; }
             if (obj->behavior == behavior && obj->activeFlags != ACTIVE_FLAG_DEACTIVATED) {
                 return obj;
             }
@@ -192,7 +193,7 @@ struct Object *obj_get_first_with_behavior_id_and_field_s32(enum BehaviorId beha
     if (behavior) {
         enum ObjectList objList = get_object_list_from_behavior(behavior);
         for (struct Object *obj = obj_get_first(objList); obj != NULL; obj = obj_get_next_internal(obj, objList)) {
-            if (++sanityDepth > 10000) { break; }
+            if (++sanityDepth > OBJECT_POOL_CAPACITY) { break; }
             if (obj->behavior == behavior && obj->activeFlags != ACTIVE_FLAG_DEACTIVATED && obj->OBJECT_FIELD_S32(fieldIndex) == value) {
                 return obj;
             }

@@ -1107,8 +1107,9 @@ function delete_save(m)
 end
 
 function check_trophyplate(m, np, sound)
+    if np.currLevelNum ~= LEVEL_SECRETHUB or sound ~= CHAR_SOUND_PUNCH_YAH then return false end
     local trophyplate = obj_get_nearest_object_with_behavior_id(m.marioObj, id_bhvTrophyPlate)
-    return np.currLevelNum == LEVEL_SECRETHUB and sound == CHAR_SOUND_PUNCH_YAH and obj_check_hitbox_overlap(m.marioObj, trophyplate)
+    return trophyplate ~= nil and obj_check_hitbox_overlap(m.marioObj, trophyplate)
 end
 
 local function has_any_behavior(obj, behaviors)

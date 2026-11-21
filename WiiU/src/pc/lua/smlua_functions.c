@@ -6,6 +6,7 @@
 #include "game/level_update.h"
 #include "game/area.h"
 #include "game/mario.h"
+#include "game/object_list_processor.h"
 #include "game/mario_step.h"
 #include "game/mario_actions_stationary.h"
 #include "audio/external.h"
@@ -1096,6 +1097,11 @@ int smlua_func_return_self(lua_State* L) {
 
 extern int gGorePacketSender;
 
+static int smlua_func_gore_allocated_slots(lua_State* L) {
+    lua_pushinteger(L, gAllocatedObjectSlots);
+    return 1;
+}
+
 static int smlua_func_gore_packet_sender(lua_State* L) {
     if (gGorePacketSender < 1 || gGorePacketSender >= MAX_PLAYERS) {
         lua_pushnil(L);
@@ -1121,6 +1127,7 @@ static int smlua_func_wiiu_touch_pressed(lua_State* L) {
 void smlua_bind_functions(void) {
     lua_State* L = gLuaState;
 
+    smlua_bind_function(L, "gore_allocated_slots", smlua_func_gore_allocated_slots);
     smlua_bind_function(L, "gore_packet_sender", smlua_func_gore_packet_sender);
 #ifdef TARGET_WII_U
     smlua_bind_function(L, "wiiu_touch_pressed", smlua_func_wiiu_touch_pressed);
