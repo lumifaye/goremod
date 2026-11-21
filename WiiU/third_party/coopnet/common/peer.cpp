@@ -302,6 +302,13 @@ void Peer::OnCandidate(const char* aSdp) {
 }
 
 void Peer::OnGatheringDone() {
+    // Older controlled peers only start gathering after this message. Do not
+    // charge our own STUN/TURN gathering time against their connection window.
+    // Extend once only; duplicate callbacks cannot keep an idle peer alive.
+    if (mControlling && !mGatherCompletionSeen) {
+        mGatherCompletionSeen = true;
+        mTimeout = clock_elapsed() + PEER_TIMEOUT;
+    }
     WIIU_PEER_TRACE("coopnet peer: local gathering done\n");
     LOG_INFO("Gathering done (%" PRIu64 ")", mId);
     MPacketPeerCandidateDone(

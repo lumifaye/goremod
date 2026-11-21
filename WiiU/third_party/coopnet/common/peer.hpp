@@ -45,6 +45,7 @@ class Peer {
         juice_state_t mLastState = JUICE_STATE_DISCONNECTED;
         uint32_t mPriority = 0;
         float mTimeout = 0;
+        bool mGatherCompletionSeen = false;
         bool mControlling = false;
 #ifdef __WIIU__
         bool mJoinStatusShown = false;

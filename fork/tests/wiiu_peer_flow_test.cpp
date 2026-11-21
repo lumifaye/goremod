@@ -11,7 +11,8 @@ CoopNetCallbacks gCoopNetCallbacks = {};
 Client::~Client() {}
 Connection::Connection(uint64_t id) { mId = id; }
 Connection::~Connection() {}
-float clock_elapsed() { return 1; }
+static float now = 1;
+float clock_elapsed() { return now; }
 static juice_config_t ice;
 extern "C" juice_agent_t* juice_create(const juice_config_t* config) { ice = *config; return reinterpret_cast<juice_agent_t*>(1); }
 extern "C" void juice_destroy(juice_agent_t*) {}
@@ -23,6 +24,7 @@ extern "C" int juice_set_remote_gathering_done(juice_agent_t*) { calls += 'D'; r
 extern "C" int juice_get_selected_candidates(juice_agent_t*, char*, size_t, char*, size_t) { return -1; }
 extern "C" const char* juice_state_to_string(juice_state_t) { return "state"; }
 void MPacket::Send(Connection&) { calls += 'S'; }
+bool MPacketPeerFailed::Receive(Connection*) { return true; }
 bool MPacketPeerSdp::Receive(Connection*) { return true; }
 bool MPacketPeerCandidate::Receive(Connection*) { return true; }
 bool MPacketPeerCandidateDone::Receive(Connection*) { return true; }
@@ -46,7 +48,9 @@ int main() {
       assert(p.Send(nullptr, 0)); sendResult=-1; assert(!p.Send(nullptr, 0));
       assert(connected==1); p.OnStateChanged(JUICE_STATE_DISCONNECTED); p.OnStateChanged(JUICE_STATE_FAILED); assert(disconnected==1); }
     calls.clear(); c.mCurrentUserId=10;
-    { Peer p(&c,50,1); assert(calls=="LS"); calls.clear(); p.Connect("sdp"); assert(calls=="RG"); p.CandidateDone(); assert(calls=="RGD"); }
+    { Peer p(&c,50,1); assert(calls=="LS"); calls.clear(); p.Connect("sdp"); assert(calls=="RG"); p.CandidateDone(); assert(calls=="RGD");
+      now=25; p.OnGatheringDone(); now=47; calls.clear(); p.Update(); assert(calls.empty());
+      p.OnGatheringDone(); calls.clear(); now=71; p.Update(); assert(calls=="S"); }
     calls.clear(); c.mCurrentUserId=50; sdpResult=-1;
     { Peer p(&c,10,1); p.Connect("invalid"); assert(calls=="R"); }
 }
