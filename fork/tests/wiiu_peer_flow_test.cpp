@@ -12,7 +12,8 @@ Client::~Client() {}
 Connection::Connection(uint64_t id) { mId = id; }
 Connection::~Connection() {}
 float clock_elapsed() { return 1; }
-extern "C" juice_agent_t* juice_create(const juice_config_t*) { return reinterpret_cast<juice_agent_t*>(1); }
+static juice_config_t ice;
+extern "C" juice_agent_t* juice_create(const juice_config_t* config) { ice = *config; return reinterpret_cast<juice_agent_t*>(1); }
 extern "C" void juice_destroy(juice_agent_t*) {}
 extern "C" void juice_set_log_level(juice_log_level_t) {}
 extern "C" int juice_set_remote_description(juice_agent_t*, const char*) { calls += 'R'; return sdpResult; }
@@ -34,6 +35,12 @@ int main() {
     gCoopNetCallbacks.OnPeerConnected=on_connected; gCoopNetCallbacks.OnPeerDisconnected=on_disconnected;
     c.mCurrentUserId=50;
     { Peer p(&c,10,1); assert(calls.empty()); p.Connect("sdp"); assert(calls=="RLSG"); p.CandidateDone(); assert(calls=="RLSGD");
+      char candidate[] = "candidate:test";
+      ice.cb_candidate(nullptr, candidate, ice.user_ptr); candidate[0] = 0;
+      ice.cb_gathering_done(nullptr, ice.user_ptr);
+      assert(calls == "RLSGD" && c.mEvents.size() == 2);
+      assert(c.mEvents[0].type == PEER_EVENT_CANDIDATE && c.mEvents[0].candidate == "candidate:test");
+      assert(c.mEvents[1].type == PEER_EVENT_GATHERING_DONE && c.mEvents[1].peerId == p.mId);
       p.OnStateChanged(JUICE_STATE_GATHERING); p.OnStateChanged(JUICE_STATE_CONNECTING);
       p.OnStateChanged(JUICE_STATE_CONNECTED); p.OnStateChanged(JUICE_STATE_COMPLETED);
       assert(p.Send(nullptr, 0)); sendResult=-1; assert(!p.Send(nullptr, 0));

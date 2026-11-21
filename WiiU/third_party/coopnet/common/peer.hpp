@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <string>
 #include "juice/juice.h"
 
 class Client;
@@ -10,6 +11,8 @@ class Client;
 typedef enum {
     PEER_EVENT_STATE_CHANGED,
     PEER_EVENT_RECV,
+    PEER_EVENT_CANDIDATE,
+    PEER_EVENT_GATHERING_DONE,
 } PeerEventType;
 
 typedef struct {
@@ -30,6 +33,7 @@ typedef struct {
     uint64_t peerId;
     PeerEventType type;
     PeerEventData data;
+    std::string candidate;
 } PeerEvent;
 
 class Peer {

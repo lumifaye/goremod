@@ -3791,6 +3791,17 @@ def apply(base, directory):
     t.replace(f, "if (localIndex == 0) {\n                    name", "if (tag && coopnet_get_dest_id(sLocalLobbyOwnerId) == tag) {\n                    name")
     t.replace(f, "    coopnet_send_to(userId, data, dataLength);\n\n    return 0;",
               "    return coopnet_send_to(userId, data, dataLength) == COOPNET_OK ? 0 : -1;")
+    f = "src/pc/network/packets/packet_reliable.c"
+    # Send an ACK to the actual sender even when another peer owns slot zero.
+    t.before(f, "    network_send_to(0, &ack);", "    ack.addr = p->addr; // borrowed for this non-reliable send\n")
+    t.replace(f, "remove_node_from_list(head);", "remove_node_from_list(node);")
+    f = "src/pc/network/network_player.c"
+    t.replace(f, "if (!np->connected) { return; }", "if (np == NULL || !np->connected) { return; }")
+    t.replace(f, "network_shutdown(false, false, true, false);\n        }\n\n        elapsed",
+              "network_shutdown(false, false, true, false);\n            return;\n        }\n\n        elapsed")
+    f = "src/pc/network/packets/packet_ordered.c"
+    t.replace(f, "globalId > MAX_PLAYERS", "globalId >= MAX_PLAYERS")
+    t.replace(f, "globalIndex > MAX_PLAYERS", "globalIndex >= MAX_PLAYERS", count=2)
     # Older flat/VR receivers read an eight-byte wire size directly into size_t.
     # On a 32-bit client that overwrites the next field during the mod handshake.
     f = "src/pc/network/packets/packet_mod_list.c"

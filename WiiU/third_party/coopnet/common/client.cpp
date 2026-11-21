@@ -15,11 +15,9 @@ Client* gClient = NULL;
 
 Client::~Client() {
     Disconnect();
-    if (mConnection) {
-        mConnection->Disconnect(true);
-        delete mConnection;
-        mConnection = nullptr;
-    }
+    delete mConnection;
+    for (auto &event : mEvents)
+        if (event.type == PEER_EVENT_RECV) free((void*)event.data.recv.data);
 }
 
 bool Client::Begin(std::string aHost, uint32_t aPort, std::string aName, uint64_t aDestId)
@@ -153,10 +151,7 @@ void Client::Update() {
     std::vector<PeerEvent> mEventsCopy;
     {
         std::lock_guard<std::mutex> guard(mEventsMutex);
-        for (auto& it : mEvents) {
-            mEventsCopy.push_back(it);
-        }
-        mEvents.clear();
+        mEventsCopy.swap(mEvents);
     }
 
     // process queued data on main thread
@@ -165,6 +160,12 @@ void Client::Update() {
             Peer* peer = PeerGet(it.peerId);
 
             switch (it.type) {
+                case PEER_EVENT_CANDIDATE:
+                    if (peer) peer->OnCandidate(it.candidate.c_str());
+                    break;
+                case PEER_EVENT_GATHERING_DONE:
+                    if (peer) peer->OnGatheringDone();
+                    break;
                 case PEER_EVENT_STATE_CHANGED:
                     if (peer) {
                         peer->OnStateChanged(it.data.stateChanged.state);
@@ -190,11 +191,11 @@ void Client::Disconnect() {
     PeerEndAll();
     if (mConnection) {
         mConnection->Disconnect(true);
-        mConnection = nullptr;
     }
 }
 
 void Client::PeerBegin(uint64_t aUserId, uint32_t aPriority) {
+    if (PeerGet(aUserId)) return;
     mPeers[aUserId] = new Peer(this, aUserId, aPriority);
     LOG_INFO("Peer begin, count: %" PRIu64 "", (uint64_t)mPeers.size());
 }
@@ -222,7 +223,8 @@ void Client::PeerEndAll() {
 }
 
 Peer* Client::PeerGet(uint64_t aUserId) {
-    return mPeers[aUserId];
+    auto it = mPeers.find(aUserId);
+    return it == mPeers.end() ? nullptr : it->second;
 }
 
 bool Client::PeerSend(const uint8_t* aData, size_t aDataLength) {
@@ -238,7 +240,7 @@ bool Client::PeerSend(const uint8_t* aData, size_t aDataLength) {
 }
 
 bool Client::PeerSendTo(uint64_t aPeerId, const uint8_t* aData, size_t aDataLength) {
-    Peer* peer = mPeers[aPeerId];
+    Peer* peer = PeerGet(aPeerId);
     if (!peer) { return false; }
     return peer->Send(aData, aDataLength);
 }

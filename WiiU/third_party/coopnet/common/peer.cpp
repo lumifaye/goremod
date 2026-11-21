@@ -20,8 +20,23 @@
 // Set to true to force TURN / relay usage for testing
 static bool sForceRelay = false;
 
-static void sOnCandidate(juice_agent_t *agent, const char *sdp, void *user_ptr) { reinterpret_cast<Peer*>(user_ptr)->OnCandidate(sdp); }
-static void sOnGatheringDone(juice_agent_t *agent, void *user_ptr) { reinterpret_cast<Peer*>(user_ptr)->OnGatheringDone(); }
+// ICE callbacks can run on a worker. Only Client::Update owns the signaling
+// stream (and the Xbox partial-write queue); copy transient SDP before return.
+static void sOnCandidate(juice_agent_t*, const char *sdp, void *user_ptr) {
+    PeerEvent event = {};
+    event.peerId = static_cast<Peer*>(user_ptr)->mId;
+    event.type = PEER_EVENT_CANDIDATE;
+    event.candidate = sdp;
+    std::lock_guard<std::mutex> guard(gClient->mEventsMutex);
+    gClient->mEvents.push_back(event);
+}
+static void sOnGatheringDone(juice_agent_t*, void *user_ptr) {
+    PeerEvent event = {};
+    event.peerId = static_cast<Peer*>(user_ptr)->mId;
+    event.type = PEER_EVENT_GATHERING_DONE;
+    std::lock_guard<std::mutex> guard(gClient->mEventsMutex);
+    gClient->mEvents.push_back(event);
+}
 
 static void sOnStateChanged(juice_agent_t *agent, juice_state_t state, void *user_ptr) {
     Peer* peer = (Peer*)user_ptr;
@@ -47,6 +62,7 @@ static void sOnRecv(juice_agent_t *agent, const char *data, size_t size, void *u
         .data = (const uint8_t*)malloc(size),
         .dataSize = size
     };
+    if (!recv.data) return;
     memcpy((void*)recv.data, data, size);
 
     std::lock_guard<std::mutex> guard(gClient->mEventsMutex);
