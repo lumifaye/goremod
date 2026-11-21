@@ -12,6 +12,7 @@
 #include "utils.hpp"
 #ifdef __WIIU__
 #include <coreinit/debug.h>
+extern "C" void wiiu_coopnet_join_status(const char*, unsigned, unsigned);
 #define WIIU_PEER_TRACE(...) OSReport(__VA_ARGS__)
 #else
 #define WIIU_PEER_TRACE(...) ((void)0)
@@ -142,6 +143,13 @@ Peer::~Peer() {
 }
 
 void Peer::Update() {
+#ifdef __WIIU__
+    // Report on either side, before the coordinator removes a timed-out joiner.
+    if (!mConnected && !mJoinStatusShown && clock_elapsed() >= mTimeout - PEER_TIMEOUT + 12.0f) {
+        mJoinStatusShown = true;
+        wiiu_coopnet_join_status(mAgent ? mJoinStage : "peer setup failed", mLocalCandidates, mRemoteCandidates);
+    }
+#endif
     // Check for peer connection fail
     if (!mConnected && mPriority >= gClient->mCurrentPriority) {
         float now = clock_elapsed();
@@ -161,6 +169,9 @@ void Peer::Connect(const char* aSdp) {
     LOG_INFO("Receive SDP (%" PRIu64 ")", mId);
     int rc = juice_set_remote_description(mAgent, aSdp);
     WIIU_PEER_TRACE("coopnet peer: remote description rc=%d\n", rc);
+#ifdef __WIIU__
+    mJoinStage = rc ? "peer description rejected" : "checking routes";
+#endif
     if (rc != 0) { return; }
 
     // On the controlled side send the SDP first so remote candidates cannot
@@ -168,6 +179,9 @@ void Peer::Connect(const char* aSdp) {
     // gather concurrently instead of waiting for the remote STUN timeout.
     if (!mControlling) { SendSdp(); }
     rc = juice_gather_candidates(mAgent);
+#ifdef __WIIU__
+    if (rc) mJoinStage = "route gathering failed";
+#endif
     WIIU_PEER_TRACE("coopnet peer: begin gathering rc=%d\n", rc);
 }
 
@@ -204,7 +218,12 @@ void Peer::Disconnect() {
 
 void Peer::CandidateAdd(const char* aSdp) {
     LOG_INFO("\n\nReceive Candidate (%" PRIu64 "):\n------------------\n%s\n------------------\n", mId, aSdp);
-    juice_add_remote_candidate(mAgent, aSdp);
+    int rc = juice_add_remote_candidate(mAgent, aSdp);
+#ifdef __WIIU__
+    if (!rc) ++mRemoteCandidates;
+#else
+    (void)rc;
+#endif
 }
 
 void Peer::CandidateDone() {
@@ -224,6 +243,9 @@ void Peer::OnStateChanged(juice_state_t aState) {
     bool isDisconnected = (aState == JUICE_STATE_DISCONNECTED) || (aState == JUICE_STATE_FAILED);
 
     if (!wasConnected && mConnected) {
+#ifdef __WIIU__
+        mJoinStatusShown = true; // not an initial join stall anymore
+#endif
         // Retrieve candidates
         char local[JUICE_MAX_CANDIDATE_SDP_STRING_LEN];
         char remote[JUICE_MAX_CANDIDATE_SDP_STRING_LEN];
@@ -270,6 +292,9 @@ void Peer::OnCandidate(const char* aSdp) {
     }
 
     LOG_INFO("\n\nSend Candidate (%" PRIu64 "):\n------------------\n%s\n------------------\n", mId, aSdp);
+#ifdef __WIIU__
+    ++mLocalCandidates;
+#endif
     MPacketPeerCandidate(
         { .lobbyId = gClient->mCurrentLobbyId, .userId = mId },
         { aSdp }

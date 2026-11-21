@@ -46,6 +46,11 @@ class Peer {
         uint32_t mPriority = 0;
         float mTimeout = 0;
         bool mControlling = false;
+#ifdef __WIIU__
+        bool mJoinStatusShown = false;
+        const char* mJoinStage = "waiting for peer description";
+        unsigned mLocalCandidates = 0, mRemoteCandidates = 0;
+#endif
 
         void SendSdp();
 
