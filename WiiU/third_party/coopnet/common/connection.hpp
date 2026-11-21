@@ -5,7 +5,7 @@
 #include "mpacket.hpp"
 #include "lobby.hpp"
 #include <map>
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
 #include <vector>
 #endif
 
@@ -20,13 +20,13 @@ class Connection {
         int64_t mDataSize = 0;
         std::map<uint64_t, uint64_t> mPeerTimeouts;
 
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
         std::vector<uint8_t> mPending;
         bool mSendFailed = false;
         void FlushPending();
 #endif
     public:
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
         void QueuePacket(const uint8_t *data, size_t size);
 #endif
         bool mActive = false;

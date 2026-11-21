@@ -214,7 +214,7 @@ void MPacket::Send(Connection& connection) {
         }
     }
 
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
     connection.QueuePacket(data, dataSize);
     free(data);
 #else

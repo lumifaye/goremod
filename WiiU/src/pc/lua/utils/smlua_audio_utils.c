@@ -892,13 +892,15 @@ void smlua_audio_custom_deinit(void) {
         pthread_mutex_unlock(&sSampleCopyMutex);
 
 #if defined(TARGET_WII_U) || defined(TARGET_XBOX360)
+        // The console mixer runs on the main thread. Detach sounds while
+        // their owning engine and node graph are still alive.
+        audio_custom_shutdown();
         if (sModAudioEngineReady) { ma_engine_uninit(&sModAudioEngine); }
         sModAudioEngineReady = false;
 #else
         ma_engine_uninit(&sModAudioEngine);
-#endif
-
         audio_custom_shutdown();
+#endif
         free(sModAudioPool);
         sModAudioPool = NULL;
 

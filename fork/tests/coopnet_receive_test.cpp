@@ -34,6 +34,18 @@ void MPacket::Read(Connection*, uint8_t* data, int64_t* size, int64_t) {
     *size = 0;
 }
 
+static int sendCalls;
+extern "C" ssize_t __wrap_send(int, const void* data, size_t len, int) {
+    const char *expected[] = {"abc", "bc", "bcde"};
+    assert(sendCalls < 3 && strlen(expected[sendCalls]) == len);
+    assert(memcmp(data, expected[sendCalls], len) == 0);
+    switch (sendCalls++) {
+        case 0: return 1;
+        case 1: errno = EAGAIN; return -1;
+        default: return len;
+    }
+}
+
 static void disconnected(bool intentional) {
     assert(!intentional);
     ++closed;
@@ -46,6 +58,9 @@ int main() {
     c.mSocket = fd[0];
     c.mActive = true;
     gCoopNetCallbacks.OnDisconnected = disconnected;
+    c.QueuePacket((const uint8_t*)"abc", 3);
+    c.QueuePacket((const uint8_t*)"de", 2);
+    assert(sendCalls == 3);
     c.Receive();
     if (!c.mActive || closed != 0) {
         std::fputs("failed: empty receive disconnected the client\n", stderr);

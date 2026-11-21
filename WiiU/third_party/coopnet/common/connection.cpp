@@ -64,7 +64,7 @@ void Connection::Disconnect(bool aIntentional) {
     }
 }
 
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
 void Connection::QueuePacket(const uint8_t *data, size_t size) {
     // Preserve framing on the non-blocking TCP stream across short writes.
     if (mSendFailed) return;
@@ -93,7 +93,7 @@ void Connection::FlushPending() {
 #endif
 
 void Connection::Update() {
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
     if (!mActive) return;
     FlushPending();
     if (mSendFailed) { Disconnect(false); return; }
@@ -160,7 +160,7 @@ void Connection::Receive() {
     // make sure connection is still active
     if (!mActive) { return; }
 
-#ifdef __XSDK__
+#if defined(__XSDK__) || defined(__WIIU__)
     if (ret < 0 && rc == EINTR) return;
     if (ret == 0 || (ret < 0 && rc != EAGAIN && rc != EWOULDBLOCK))
         printf("coopnet: signaling receive ended (bytes=%d errno=%d)\n", ret, rc);
