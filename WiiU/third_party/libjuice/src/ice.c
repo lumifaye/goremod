@@ -140,7 +140,14 @@ int ice_parse_candidate_sdp(const char *line, ice_candidate_t *candidate) {
 		int ret = parse_sdp_candidate(line, candidate);
 		if (ret < 0)
 			return ret;
+#ifdef JUICE_NO_IPV6
+		// An unresolved address cannot be checked by this IPv4-only agent.
+		// Do not spend a bounded checklist slot or report it as a usable route.
+		if (ice_resolve_candidate(candidate, ICE_RESOLVE_MODE_SIMPLE) != 0)
+			return ICE_PARSE_IGNORED;
+#else
 		ice_resolve_candidate(candidate, ICE_RESOLVE_MODE_SIMPLE);
+#endif
 		return 0;
 	}
 	return ICE_PARSE_ERROR;
@@ -194,6 +201,7 @@ int ice_resolve_candidate(ice_candidate_t *candidate, ice_resolve_mode_t mode) {
 		candidate->resolved.len = 0;
 		return -1;
 	}
+	candidate->resolved.len = 0;
 	for (struct addrinfo *ai = ai_list; ai; ai = ai->ai_next) {
 #ifdef JUICE_NO_IPV6
 		if (ai->ai_family == AF_INET && ai->ai_addrlen <= sizeof(candidate->resolved.addr)) {
@@ -206,7 +214,7 @@ int ice_resolve_candidate(ice_candidate_t *candidate, ice_resolve_mode_t mode) {
 		}
 	}
 	freeaddrinfo(ai_list);
-	return 0;
+	return candidate->resolved.len ? 0 : -1;
 }
 
 int ice_add_candidate(ice_candidate_t *candidate, ice_description_t *description) {

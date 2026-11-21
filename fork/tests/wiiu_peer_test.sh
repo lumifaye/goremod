@@ -23,4 +23,7 @@ if [ -n "${PPC_CC:-}" ] && [ -n "${QEMU_PPC:-}" ]; then
  "$QEMU_PPC" "$tmp/hash-ppc"
  echo 'big-endian PowerPC SHA-1, HMAC and STUN wire vectors: ok'
 fi
+cc -O2 -std=gnu11 -DJUICE_NO_IPV6 -I"$juice" -I"$coop/lib/include/juice" -pthread \
+ "$tests/wiiu_ipv4_candidate_test.c" "$juice"/*.c -lm -o "$tmp/ipv4"
+"$tmp/ipv4"
 echo 'hash vectors, peer state/order, and bidirectional ICE: ok'
