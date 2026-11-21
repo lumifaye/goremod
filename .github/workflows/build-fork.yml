@@ -112,7 +112,19 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip patchelf
+          sudo apt-get install -y ccache build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip patchelf
+
+      - name: Restore native compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ubuntu22-linux-v1-${{ github.sha }}
+          restore-keys: ccache-ubuntu22-linux-v1-
+
+      - name: Enable compiler cache for host builds
+        run: |
+          ccache --set-config=max_size=300M
+          echo /usr/lib/ccache >> "$GITHUB_PATH"
 
       - name: Get the game and change it
         run: python3 fork/apply.py pc game
@@ -373,13 +385,29 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            Android/**/*.gradle
+            Android/**/gradle-wrapper.properties
 
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
+          sudo apt-get install -y ccache build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           bash fork/ci.sh "Install the NDK" "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973"
+
+      - name: Restore native compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ubuntu22-android-v1-${{ github.sha }}
+          restore-keys: ccache-ubuntu22-android-v1-
+
+      - name: Enable compiler cache for host builds
+        run: |
+          ccache --set-config=max_size=300M
+          echo /usr/lib/ccache >> "$GITHUB_PATH"
 
       - name: Get the game and change it
         run: python3 fork/apply.py android game
@@ -450,13 +478,29 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            VR/**/*.gradle
+            VR/**/gradle-wrapper.properties
 
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
+          sudo apt-get install -y ccache build-essential git python3 libglew-dev libsdl2-dev libz-dev libcurl4-openssl-dev zip unzip
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Restore native compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ubuntu22-quest-v1-${{ github.sha }}
+          restore-keys: ccache-ubuntu22-quest-v1-
+
+      - name: Enable compiler cache for host builds
+        run: |
+          ccache --set-config=max_size=300M
+          echo /usr/lib/ccache >> "$GITHUB_PATH"
 
       - name: Get the game and change it
         run: python3 fork/apply.py vr game
