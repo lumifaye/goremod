@@ -391,7 +391,17 @@ jobs:
         working-directory: game
         run: |
           chmod +x platform/gradlew
-          bash "$GITHUB_WORKSPACE/fork/ci.sh" "Build the app" ./platform/gradlew --no-daemon assembleRelease
+          # Retry only packaging failures; do not hide compilation or signing errors.
+          gradle=(./platform/gradlew --no-daemon --stacktrace assembleRelease)
+          log="$RUNNER_TEMP/android-assemble.log"
+          if ! "${gradle[@]}" > "$log" 2>&1; then
+            cat "$log"
+            grep -Fq "> Task :platform:app:packageRelease FAILED" "$log" || exit 1
+            echo "::warning::Android APK packaging failed; retrying once with one worker"
+            bash "$GITHUB_WORKSPACE/fork/ci.sh" "Retry APK packaging" "${gradle[@]}" --max-workers=1
+          else
+            cat "$log"
+          fi
 
       - name: Pack
         run: |
