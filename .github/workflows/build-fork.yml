@@ -628,7 +628,7 @@ jobs:
           python3 fork/ci_report.py "Wii U ($TITLE): changes" "$OUT/apply.txt"
           exit "$status"
 
-      - name: Stage known-good Wii U CoopNet for crossplay comparison
+      - name: Stage known-good Wii U transport (keep current game networking)
         if: matrix.variant == 'fork'
         run: bash fork/ci-wiiu-coopnet-baseline.sh
 

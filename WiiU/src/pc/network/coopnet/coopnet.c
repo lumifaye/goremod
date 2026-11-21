@@ -127,6 +127,11 @@ static void coopnet_on_peer_connected(uint64_t peerId) {
     wiiu_coopnet_logf("coopnet: peer connected peerId=%llu\n", (unsigned long long)peerId);
 #endif
     LOG_INFO("coopnet peer connected peerId=%" PRIu64, peerId);
+#ifdef TARGET_WII_U
+    if (gDjuiRoot && gNetworkType == NT_SERVER) {
+        djui_popup_create("CoopNet: peer link ready", 1);
+    }
+#endif
     if (gNetworkType == NT_CLIENT && peerId == sLocalLobbyOwnerId && !gNetworkPlayerLocal && !sHostHandshakeStarted) {
         sHostHandshakeStarted = true;
         network_send_mod_list_request();
@@ -179,6 +184,11 @@ static void coopnet_on_lobby_joined(uint64_t lobbyId, uint64_t userId, uint64_t 
                       (unsigned long long)destId);
 #endif
     uint64_t localUserId = coopnet_get_local_user_id();
+#ifdef TARGET_WII_U
+    if (gDjuiRoot && gNetworkType == NT_SERVER && userId != localUserId) {
+        djui_popup_create("CoopNet: player joining lobby", 1);
+    }
+#endif
     if (ownerId != localUserId) {
         coopnet_reserve_user_id(ownerId);
     }
