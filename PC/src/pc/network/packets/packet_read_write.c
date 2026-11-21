@@ -183,6 +183,7 @@ u8 packet_initial_read(struct Packet* packet) {
 }
 
 void packet_read(struct Packet* packet, void* data, u16 length) {
+    if (length == 0) { return; } // Empty optional fields consume no bytes.
     u16 cursor = packet->cursor;
     if (data == NULL) { packet->error = true; return; }
     if (cursor + length >= PACKET_LENGTH) { packet->error = true; return; }
