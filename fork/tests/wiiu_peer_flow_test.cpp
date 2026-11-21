@@ -36,11 +36,11 @@ int main() {
     Client c; Connection socket(0); c.mConnection = &socket; gClient = &c;
     gCoopNetCallbacks.OnPeerConnected=on_connected; gCoopNetCallbacks.OnPeerDisconnected=on_disconnected;
     c.mCurrentUserId=50;
-    { Peer p(&c,10,1); assert(calls.empty()); p.Connect("sdp"); assert(calls=="RLSG"); p.CandidateDone(); assert(calls=="RLSGD");
+    { Peer p(&c,10,1); assert(calls.empty()); p.Connect("sdp"); assert(calls=="RGLS"); p.CandidateDone(); assert(calls=="RGLSD");
       char candidate[] = "candidate:test";
       ice.cb_candidate(nullptr, candidate, ice.user_ptr); candidate[0] = 0;
       ice.cb_gathering_done(nullptr, ice.user_ptr);
-      assert(calls == "RLSGD" && c.mEvents.size() == 2);
+      assert(calls == "RGLSD" && c.mEvents.size() == 2);
       assert(c.mEvents[0].type == PEER_EVENT_CANDIDATE && c.mEvents[0].candidate == "candidate:test");
       assert(c.mEvents[1].type == PEER_EVENT_GATHERING_DONE && c.mEvents[1].peerId == p.mId);
       p.OnStateChanged(JUICE_STATE_GATHERING); p.OnStateChanged(JUICE_STATE_CONNECTING);

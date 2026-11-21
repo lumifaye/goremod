@@ -176,11 +176,12 @@ void Peer::Connect(const char* aSdp) {
 #endif
     if (rc != 0) { return; }
 
-    // On the controlled side send the SDP first so remote candidates cannot
-    // arrive before the other side has a description. Both roles can then
-    // gather concurrently instead of waiting for the remote STUN timeout.
-    if (!mControlling) { SendSdp(); }
+    // Host candidates are gathered synchronously; STUN/TURN continues in the
+    // background. Include the LAN endpoint in the answer so the offerer can
+    // start checks without waiting for a separate candidate message. Worker
+    // notifications are queued, so the answer still goes on the stream first.
     rc = juice_gather_candidates(mAgent);
+    if (!mControlling) { SendSdp(); }
 #ifdef __WIIU__
     if (rc) mJoinStage = "route gathering failed";
 #endif
@@ -297,6 +298,9 @@ void Peer::OnCandidate(const char* aSdp) {
 #ifdef __WIIU__
     ++mLocalCandidates;
 #endif
+    // Do not consume a second checklist slot for an exact SDP candidate line.
+    const std::string line = std::string("\r\n") + aSdp + "\r\n";
+    if (strstr(mSdp, line.c_str())) return;
     MPacketPeerCandidate(
         { .lobbyId = gClient->mCurrentLobbyId, .userId = mId },
         { aSdp }
