@@ -124,6 +124,7 @@ JUICE_EXPORT int juice_add_turn_server(juice_agent_t *agent, const juice_turn_se
 JUICE_EXPORT int juice_set_remote_gathering_done(juice_agent_t *agent);
 JUICE_EXPORT int juice_send(juice_agent_t *agent, const char *data, size_t size);
 JUICE_EXPORT int juice_send_diffserv(juice_agent_t *agent, const char *data, size_t size, int ds);
+JUICE_EXPORT void juice_get_peer_checks(juice_agent_t *agent, unsigned *sent, unsigned *received, unsigned *answered);
 JUICE_EXPORT juice_state_t juice_get_state(juice_agent_t *agent);
 JUICE_EXPORT int juice_get_selected_candidates(juice_agent_t *agent, char *local, size_t local_size,
                                                char *remote, size_t remote_size);

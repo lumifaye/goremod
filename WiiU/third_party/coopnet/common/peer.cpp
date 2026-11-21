@@ -12,7 +12,7 @@
 #include "utils.hpp"
 #ifdef __WIIU__
 #include <coreinit/debug.h>
-extern "C" void wiiu_coopnet_join_status(const char*, unsigned, unsigned);
+extern "C" void wiiu_coopnet_join_status(const char*, unsigned, unsigned, unsigned, unsigned, unsigned);
 #define WIIU_PEER_TRACE(...) OSReport(__VA_ARGS__)
 #else
 #define WIIU_PEER_TRACE(...) ((void)0)
@@ -147,7 +147,9 @@ void Peer::Update() {
     // Report on either side, before the coordinator removes a timed-out joiner.
     if (!mConnected && !mJoinStatusShown && clock_elapsed() >= mTimeout - PEER_TIMEOUT + 12.0f) {
         mJoinStatusShown = true;
-        wiiu_coopnet_join_status(mAgent ? mJoinStage : "peer setup failed", mLocalCandidates, mRemoteCandidates);
+        unsigned sent, received, answered;
+        juice_get_peer_checks(mAgent, &sent, &received, &answered);
+        wiiu_coopnet_join_status(mAgent ? mJoinStage : "peer setup failed", mLocalCandidates, mRemoteCandidates, sent, received, answered);
     }
 #endif
     // Check for peer connection fail

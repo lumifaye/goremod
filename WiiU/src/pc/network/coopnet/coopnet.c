@@ -18,11 +18,11 @@
 #include "pc/wiiu_network.h"
 #include <stdarg.h>
 #include <stdio.h>
-void wiiu_coopnet_join_status(const char* stage, unsigned local, unsigned remote) {
+void wiiu_coopnet_join_status(const char* stage, unsigned local, unsigned remote, unsigned sent, unsigned received, unsigned answered) {
     if (!gDjuiRoot || gNetworkType == NT_NONE) return;
     char message[128];
-    snprintf(message, sizeof(message), "CoopNet: %s\nRoutes: local %u, remote %u", stage, local, remote);
-    djui_popup_create(message, 3);
+    snprintf(message, sizeof(message), "CoopNet: %s\nRoutes: local %u, remote %u\nChecks out/in/replies: %u/%u/%u", stage, local, remote, sent, received, answered);
+    djui_popup_create(message, 4);
 }
 static void wiiu_coopnet_logf(const char* fmt, ...) {
     (void)fmt;

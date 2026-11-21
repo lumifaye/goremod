@@ -123,6 +123,7 @@ typedef struct agent_stun_entry {
 } agent_stun_entry_t;
 
 struct juice_agent {
+	unsigned checks_sent, checks_received, checks_answered;
 	juice_config_t config;
 	juice_state_t state;
 	agent_mode_t mode;

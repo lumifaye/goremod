@@ -25,7 +25,7 @@ static void run_pair(bool legacy_controlled) {
  for(int i=0;i<500 && !(connected(&a)&&connected(&b));i++){ if(transfer(&a,&b) && legacy_controlled) { assert(juice_gather_candidates(b.agent)==0); legacy_controlled=false; } transfer(&b,&a);usleep(10000);}
  assert(connected(&a)&&connected(&b));assert(juice_send(a.agent,"ping",4)==0);assert(juice_send(b.agent,"ping",4)==0);
  for(int i=0;i<100 && !(atomic_load(&a.received)&&atomic_load(&b.received));i++)usleep(10000);
- assert(atomic_load(&a.received)&&atomic_load(&b.received));juice_destroy(a.agent);juice_destroy(b.agent);
+ assert(atomic_load(&a.received)&&atomic_load(&b.received));unsigned sent, received, answered; juice_get_peer_checks(a.agent,&sent,&received,&answered); assert(sent && answered); juice_get_peer_checks(b.agent,&sent,&received,&answered); assert(received); juice_destroy(a.agent);juice_destroy(b.agent);
 }
 
 int main(void) { run_pair(false); run_pair(true); puts("simultaneous and legacy-controlled ICE; bidirectional UDP: ok"); }

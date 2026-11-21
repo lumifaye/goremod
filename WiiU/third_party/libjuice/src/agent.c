@@ -720,6 +720,16 @@ int agent_channel_send(juice_agent_t *agent, agent_stun_entry_t *entry, const ad
 	return agent_direct_send(agent, &entry->record, buffer, len, ds);
 }
 
+void juice_get_peer_checks(juice_agent_t *agent, unsigned *sent, unsigned *received, unsigned *answered) {
+    *sent = *received = *answered = 0;
+    if (!agent) return;
+    conn_lock(agent);
+    *sent = agent->checks_sent;
+    *received = agent->checks_received;
+    *answered = agent->checks_answered;
+    conn_unlock(agent);
+}
+
 juice_state_t agent_get_state(juice_agent_t *agent) {
 	conn_lock(agent);
 	juice_state_t state = agent->state;
@@ -866,6 +876,7 @@ int agent_bookkeeping(juice_agent_t *agent, timestamp_t *next_timestamp) {
 				}
 
 				if (ret >= 0) {
+					if (entry->type == AGENT_STUN_ENTRY_TYPE_CHECK) ++agent->checks_sent;
 					--entry->retransmissions;
 					if (entry->retransmissions < 0) {
 						entry->next_transmission = now + LAST_STUN_RETRANSMISSION_TIMEOUT;
@@ -1340,6 +1351,7 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
 		if (entry->type != AGENT_STUN_ENTRY_TYPE_CHECK)
 			return -1;
 
+		++agent->checks_received;
 		ice_candidate_pair_t *pair = entry->pair;
 		if (msg->ice_controlling == msg->ice_controlled) {
 			JLOG_WARN("Controlling and controlled attributes mismatch in request");
@@ -1427,6 +1439,7 @@ int agent_process_stun_binding(juice_agent_t *agent, const stun_message_t *msg,
 		break;
 	}
 	case STUN_CLASS_RESP_SUCCESS: {
+		if (entry->type == AGENT_STUN_ENTRY_TYPE_CHECK) ++agent->checks_answered;
 		JLOG_DEBUG("Received STUN Binding success response from %s",
 		           entry->type == AGENT_STUN_ENTRY_TYPE_CHECK ? "peer" : "server");
 
