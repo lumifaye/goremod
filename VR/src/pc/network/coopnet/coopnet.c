@@ -28,6 +28,7 @@ char sCoopNetDescription[MAX_COOPNET_DESCRIPTION_LENGTH] = "";
 
 static uint64_t sLocalLobbyId = 0;
 static uint64_t sLocalLobbyOwnerId = 0;
+static bool sHostHandshakeStarted;
 static enum NetworkType sNetworkType;
 static bool sReconnecting = false;
 static enum CoopNetLobbyChannel sLobbyChannel = COOPNET_LOBBY_STANDARD_PUBLIC;
@@ -104,6 +105,20 @@ static void coopnet_on_disconnected(bool intentional) {
     gCoopNetCallbacks.OnLobbyListFinish = NULL;
 }
 
+// Queue the reliable game handshake when the intended lobby has supplied its
+// owner. ICE readiness can arrive before OR after the lobby snapshot. The
+// reliable queue owns retransmission; starting again would clear mod state.
+static void coopnet_start_join_once(void) {
+    if (gNetworkType != NT_CLIENT || !sLocalLobbyOwnerId || !sLocalLobbyId ||
+        sLocalLobbyId != gCoopNetDesiredLobby || gNetworkPlayerLocal || sHostHandshakeStarted) return;
+    sHostHandshakeStarted = true;
+    network_send_mod_list_request();
+}
+
+static void coopnet_on_peer_connected(uint64_t peerId) {
+    if (peerId == sLocalLobbyOwnerId) coopnet_start_join_once();
+}
+
 static void coopnet_on_peer_disconnected(uint64_t peerId) {
     u8 localIndex = coopnet_user_id_to_local_index(peerId);
     if (localIndex != UNKNOWN_LOCAL_INDEX && gNetworkPlayers[localIndex].connected) {
@@ -120,7 +135,7 @@ static void coopnet_on_load_balance(const char* host, uint32_t port) {
 }
 
 static void coopnet_on_receive(uint64_t userId, const uint8_t* data, uint64_t dataLength) {
-    coopnet_set_user_id(0, userId);
+    if (gNetworkType == NT_SERVER) coopnet_set_user_id(0, userId);
     u8 localIndex = coopnet_user_id_to_local_index(userId);
     network_receive(localIndex, &userId, (u8*)data, dataLength);
 }
@@ -138,12 +153,7 @@ static void coopnet_on_lobby_joined(uint64_t lobbyId, uint64_t userId, uint64_t 
 
     coopnet_save_dest_id(userId, destId);
 
-    if (userId == coopnet_get_local_user_id() && gNetworkType == NT_CLIENT) {
-        // Every lobby type uses CoopNet's normal mod synchronization. This is
-        // required for VR-public PC/standalone sessions just as it is for
-        // private, direct, and standard public sessions.
-        network_send_mod_list_request();
-    }
+    coopnet_start_join_once();
 #ifdef DISCORD_SDK
     if (gDiscordInitialized) {
         discord_activity_update();
@@ -289,6 +299,7 @@ void ns_coopnet_update(void) {
             }
         } else if (sNetworkType == NT_CLIENT) {
             LOG_INFO("Join lobby");
+            sHostHandshakeStarted = false;
             coopnet_lobby_join(gCoopNetDesiredLobby, gCoopNetPassword);
         }
         sNetworkType = NT_NONE;
@@ -339,11 +350,13 @@ static void ns_coopnet_shutdown(bool reconnecting) {
     gCoopNetCallbacks.OnLobbyJoined = NULL;
     gCoopNetCallbacks.OnLobbyLeft = NULL;
     gCoopNetCallbacks.OnError = NULL;
+    gCoopNetCallbacks.OnPeerConnected = NULL;
     gCoopNetCallbacks.OnPeerDisconnected = NULL;
     gCoopNetCallbacks.OnLoadBalance = NULL;
 
     sLocalLobbyId = 0;
     sLocalLobbyOwnerId = 0;
+    sHostHandshakeStarted = false;
     sActiveLobbyChannelValid = false;
 }
 
@@ -354,6 +367,7 @@ static CoopNetRc coopnet_initialize(void) {
     gCoopNetCallbacks.OnLobbyJoined = coopnet_on_lobby_joined;
     gCoopNetCallbacks.OnLobbyLeft = coopnet_on_lobby_left;
     gCoopNetCallbacks.OnError = coopnet_on_error;
+    gCoopNetCallbacks.OnPeerConnected = coopnet_on_peer_connected;
     gCoopNetCallbacks.OnPeerDisconnected = coopnet_on_peer_disconnected;
     gCoopNetCallbacks.OnLoadBalance = coopnet_on_load_balance;
 

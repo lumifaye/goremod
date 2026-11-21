@@ -3767,24 +3767,6 @@ def apply(base, directory):
     game_title(t, base)
     version_and_lobbies(t, base)
     f = "src/pc/network/coopnet/coopnet.c"
-    if "sHostHandshakeStarted" not in t.read(f)[0]:
-        t.after(f, "static uint64_t sLocalLobbyOwnerId = 0;\n", "static bool sHostHandshakeStarted;\n")
-        t.before(f, "static void coopnet_on_peer_disconnected(uint64_t peerId) {", """static void coopnet_on_peer_connected(uint64_t peerId) {
-    if (gNetworkType == NT_CLIENT && peerId == sLocalLobbyOwnerId && !gNetworkPlayerLocal && !sHostHandshakeStarted) {
-        sHostHandshakeStarted = true;
-        network_send_mod_list_request();
-    }
-}
-
-""")
-        t.after(f, "    gCoopNetCallbacks.OnPeerDisconnected = coopnet_on_peer_disconnected;\n", "    gCoopNetCallbacks.OnPeerConnected = coopnet_on_peer_connected;\n")
-        t.after(f, "    gCoopNetCallbacks.OnPeerDisconnected = NULL;\n", "    gCoopNetCallbacks.OnPeerConnected = NULL;\n")
-        t.after(f, "    sLocalLobbyOwnerId = 0;\n", "    sHostHandshakeStarted = false;\n")
-        t.before(f, "            coopnet_lobby_join(gCoopNetDesiredLobby, gCoopNetPassword);", "            sHostHandshakeStarted = false;\n")
-        start = "    if (userId == coopnet_get_local_user_id() && gNetworkType == NT_CLIENT) {"
-        block = t.read(f)[0].split(start, 1)[1].split("\n    }", 1)[0]
-        t.replace(f, start + block + "\n    }", "    // The host peer-ready callback starts mod synchronization.")
-        t.replace(f, "    coopnet_set_user_id(0, userId);", "    if (gNetworkType == NT_SERVER) coopnet_set_user_id(0, userId);")
     # The coordinator reports a destination ID, not a session user ID.
     t.replace(f, "u8 localIndex = coopnet_user_id_to_local_index(tag);", """u8 localIndex = UNKNOWN_LOCAL_INDEX;
                 for (u8 i = 1; tag && i < MAX_PLAYERS; ++i) {

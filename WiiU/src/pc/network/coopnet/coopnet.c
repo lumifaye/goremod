@@ -111,6 +111,16 @@ static void coopnet_on_disconnected(bool intentional) {
     gCoopNetCallbacks.OnLobbyListFinish = NULL;
 }
 
+// Queue the reliable game handshake when the intended lobby has supplied its
+// owner. ICE readiness can arrive before OR after the lobby snapshot. The
+// reliable queue owns retransmission; starting again would clear mod state.
+static void coopnet_start_join_once(void) {
+    if (gNetworkType != NT_CLIENT || !sLocalLobbyOwnerId || !sLocalLobbyId ||
+        sLocalLobbyId != gCoopNetDesiredLobby || gNetworkPlayerLocal || sHostHandshakeStarted) return;
+    sHostHandshakeStarted = true;
+    network_send_mod_list_request();
+}
+
 static void coopnet_on_peer_disconnected(uint64_t peerId) {
 #ifdef TARGET_WII_U
     wiiu_coopnet_logf("coopnet: peer disconnected peerId=%llu\n", (unsigned long long)peerId);
@@ -132,10 +142,7 @@ static void coopnet_on_peer_connected(uint64_t peerId) {
         djui_popup_create("CoopNet: peer link ready", 1);
     }
 #endif
-    if (gNetworkType == NT_CLIENT && peerId == sLocalLobbyOwnerId && !gNetworkPlayerLocal && !sHostHandshakeStarted) {
-        sHostHandshakeStarted = true;
-        network_send_mod_list_request();
-    }
+    if (peerId == sLocalLobbyOwnerId) coopnet_start_join_once();
 }
 
 static void coopnet_on_load_balance(const char* host, uint32_t port) {
@@ -232,7 +239,7 @@ static void coopnet_on_lobby_joined(uint64_t lobbyId, uint64_t userId, uint64_t 
     }
 
     coopnet_save_dest_id(userId, destId);
-
+    coopnet_start_join_once();
 
 #ifdef DISCORD_SDK
     if (gDiscordInitialized) {
