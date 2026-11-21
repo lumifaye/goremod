@@ -18,6 +18,7 @@ static int test(void){
  packet_duplicate(&p,&copy);if(copy.buffer[1]!=2||copy.buffer[2]!=0)return 4;
  packet_ordered_begin();packet_init(&p,PACKET_PLAYER,false,PLMT_NONE);packet_set_ordered_data(&p);packet_ordered_end();
  if(p.buffer[0]!=PACKET_PLAYER||p.buffer[3]!=4||p.buffer[5]!=7||p.buffer[6]!=1||p.buffer[7]!=0||p.buffer[8]!=1||p.buffer[9]!=0)return 5;
+ p.buffer[1]=0x34;p.buffer[2]=0x12;if(packet_seq_read_le(&p)!=0x1234)return 6;
  return 0;
 }
 #ifdef PPC_FREESTANDING

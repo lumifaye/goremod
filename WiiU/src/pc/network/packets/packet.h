@@ -160,6 +160,7 @@ void packet_receive(struct Packet* packet);
 bool packet_spoofed(struct Packet* p, u8 globalIndex);
 
 // packet_read_write.c
+u16 packet_seq_read_le(const struct Packet* p);
 void packet_init(struct Packet* packet, enum PacketType packetType, bool reliable, enum PacketLevelMatchType levelAreaMustMatch);
 void packet_duplicate(struct Packet* srcPacket, struct Packet* dstPacket);
 void packet_set_flags(struct Packet* packet);

@@ -48,6 +48,10 @@ static u32 packet_load_u32_le(const u8* src) {
 }
 #endif
 
+u16 packet_seq_read_le(const struct Packet* p) {
+    return (u16)p->buffer[1] | ((u16)p->buffer[2] << 8);
+}
+
 void packet_init(struct Packet* packet, enum PacketType packetType, bool reliable, enum PacketLevelMatchType levelAreaMustMatch) {
     memset(packet->buffer, 0, PACKET_LENGTH);
     packet->packetType = packetType;

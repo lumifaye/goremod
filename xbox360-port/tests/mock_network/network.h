@@ -16,6 +16,7 @@ struct NetworkPlayer { u8 globalIndex; }; extern struct NetworkPlayer *gNetworkP
 struct Packet {
  enum PacketType packetType; u8 localIndex; u16 dataLength; u16 cursor; void *addr; bool error,writeError,reliable,levelAreaMustMatch,levelMustMatch,requestBroadcast,keepSendingAfterDisconnect; u8 destGlobalId; u16 seqId; bool sent; u8 orderedFromGlobalId; u16 orderedGroupId,orderedSeqId; u8 courseNum,actNum; s16 levelNum; u8 areaIndex; u8 buffer[PACKET_LENGTH];
 };
+u16 packet_seq_read_le(const struct Packet* p);
 void packet_init(struct Packet*, enum PacketType, bool, enum PacketLevelMatchType);
 void packet_write(struct Packet*, void*, u16);void packet_write_bytes(struct Packet*,const void*,u16);
 void packet_read(struct Packet*,void*,u16);void packet_read_bytes(struct Packet*,void*,u16);
