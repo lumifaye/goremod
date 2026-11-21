@@ -18,7 +18,7 @@
 void mods_size_enforce(struct Mods* mods) {
     for (int i = 0; i < mods->entryCount; i++) {
         struct Mod* mod = mods->entries[i];
-        if (mod->size >= MAX_MOD_SIZE) {
+        if (mod->size > MAX_MOD_SIZE) {
             mod->enabled = false;
             mod->selectable = false;
         }

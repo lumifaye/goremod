@@ -3810,7 +3810,7 @@ def apply(base, directory):
         if old in t.read(f)[0]:
             t.replace(f, old, "    u64 wireSize = 0;\n"
                       "    packet_read(p, &wireSize, sizeof(wireSize));\n"
-                      "    if (p->error || wireSize >= MAX_MOD_SIZE) {\n"
+                      "    if (p->error || wireSize > MAX_MOD_SIZE) {\n"
                       "        djui_popup_create(DLANG(NOTIF, DISCONNECT_BIG_MOD), 4);\n"
                       "        network_shutdown(false, false, false, false);\n"
                       "        return;\n    }\n"

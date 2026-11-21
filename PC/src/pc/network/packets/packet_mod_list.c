@@ -243,7 +243,7 @@ void network_receive_mod_list_entry(struct Packet* p) {
     }
 
     // sanity check mod size
-    if (mod->size >= MAX_MOD_SIZE) {
+    if (mod->size > MAX_MOD_SIZE) {
         djui_popup_create(DLANG(NOTIF, DISCONNECT_BIG_MOD), 4);
         network_shutdown(false, false, false, false);
         return;
