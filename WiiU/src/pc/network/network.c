@@ -680,7 +680,6 @@ static void network_update_area_timer(void) {
 #ifdef COOPNET
 void network_update_coopnet(void) {
     if (gNetworkType != NT_NONE) { return; }
-    if (!ns_coopnet_is_connected()) { return; }
     ns_coopnet_update();
 }
 #endif

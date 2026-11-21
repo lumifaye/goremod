@@ -209,7 +209,7 @@ void packet_receive(struct Packet* p) {
     }
 
     // refuse packets from unknown players other than join request
-    if (gNetworkType == NT_SERVER && p->localIndex == UNKNOWN_LOCAL_INDEX && !network_allow_unknown_local_index(packetType)) {
+    if (gNetworkType == NT_SERVER && (p->localIndex >= MAX_PLAYERS || !gNetworkPlayers[p->localIndex].connected) && !network_allow_unknown_local_index(packetType)) {
         if (packetType == PACKET_NETWORK_PLAYERS_REQUEST
             || packetType == PACKET_LUA_SYNC_TABLE_REQUEST
             || packetType == PACKET_LUA_SYNC_TABLE

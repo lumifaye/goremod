@@ -138,7 +138,9 @@ void Client::Update() {
     mUpdating = true;
 
     mConnection->Receive();
+    if (mShutdown) { mUpdating = false; return; }
     mConnection->Update();
+    if (mShutdown) { mUpdating = false; return; }
 
     // update peer
     for (auto& it : mPeers) {
@@ -157,7 +159,9 @@ void Client::Update() {
     // process queued data on main thread
     {
         for (auto& it : mEventsCopy) {
-            Peer* peer = PeerGet(it.peerId);
+            // A previous callback may have stopped the session. Still free
+            // queued payloads, but do not deliver them to the old game.
+            Peer* peer = mShutdown ? nullptr : PeerGet(it.peerId);
 
             switch (it.type) {
                 case PEER_EVENT_CANDIDATE:
@@ -201,7 +205,7 @@ void Client::PeerBegin(uint64_t aUserId, uint32_t aPriority) {
 }
 
 void Client::PeerEnd(uint64_t aUserId) {
-    Peer* peer = mPeers[aUserId];
+    Peer* peer = PeerGet(aUserId);
     if (peer) {
         peer->Disconnect();
         mPeers.erase(peer->mId);

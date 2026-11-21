@@ -5,11 +5,15 @@ CoopNetCallbacks gCoopNetCallbacks = { 0 };
 CoopNetSettings gCoopNetSettings = { 0 };
 
 bool coopnet_is_connected(void) {
-    return (gClient && gClient->mConnection && gClient->mConnection->mActive);
+    return (gClient && !gClient->mShutdown && gClient->mConnection && gClient->mConnection->mActive);
 }
 
 CoopNetRc coopnet_begin(const char* aHost, uint32_t aPort, const char* aName, uint64_t aDestId) {
-    if (gClient) { return COOPNET_OK; }
+    if (gClient && gClient->mShutdown) {
+        if (gClient->mUpdating) return COOPNET_FAILED;
+        coopnet_update(); // finish deferred destruction before starting a new session
+    }
+    if (gClient) { return coopnet_is_connected() ? COOPNET_OK : COOPNET_FAILED; }
 
     gClient = new Client();
     bool ret = gClient->Begin(aHost, aPort, aName, aDestId);

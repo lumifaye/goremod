@@ -283,7 +283,7 @@ void MPacket::Process(Connection* connection, uint8_t* aData) {
 
     // sanity check data size
     int64_t packetSize = packet->mVoidDataSize;
-    if (header.dataSize > 0 && (int64_t)header.dataSize != packet->mVoidDataSize) {
+    if ((int64_t)header.dataSize != packet->mVoidDataSize) {
         if (header.packetType == MPACKET_INFO && (int64_t)header.dataSize == packet->mRequiredSize) {
             packetSize = packet->mRequiredSize;
         } else {
@@ -293,6 +293,8 @@ void MPacket::Process(Connection* connection, uint8_t* aData) {
     }
 
     // receive data
+    // The parser reuses packet instances. Clear optional legacy INFO fields.
+    if (packetSize < packet->mVoidDataSize) memset(packet->mVoidData, 0, packet->mVoidDataSize);
     memcpy(packet->mVoidData, voidData, packetSize);
     wire_turn_fields(header.packetType, (uint8_t*)packet->mVoidData, packetSize, WIRE_TURN);
 
@@ -301,33 +303,12 @@ void MPacket::Process(Connection* connection, uint8_t* aData) {
     uint8_t* c = (uint8_t*)stringData;
     uint8_t* climit = c + header.stringSize;
     while (c < climit) {
-        // retrieve string length
+        if (climit - c < 2) { parseError = true; break; }
         uint16_t length = wire_get16(c);
-        c += sizeof(uint16_t);
-        if (c >= climit) {
-            if (length == 0) {
-                packet->mStringData.push_back("");
-                break;
-            }
-            parseError = true;
-            break;
-        }
-
-        // allocate string
-        char* cstr = (char*)malloc(length + 1);
-        if (!cstr) {
-            LOG_ERROR("Failed to allocate string");
-            parseError = true;
-            break;
-        }
-
-        // fill string
-        snprintf(cstr, length + 1, "%s", c);
+        c += 2;
+        if (length > climit - c) { parseError = true; break; }
+        packet->mStringData.emplace_back(reinterpret_cast<const char*>(c), length);
         c += length;
-
-        // remember string
-        packet->mStringData.push_back(cstr);
-        free(cstr);
     }
     if (c != climit) { parseError = true; }
 
@@ -360,30 +341,26 @@ void MPacket::Process(Connection* connection, uint8_t* aData) {
 }
 
 void MPacket::Read(Connection* connection, uint8_t* aData, int64_t* aDataSize, int64_t aMaxDataSize) {
-    while (true) {
-        MPacketHeader header = wire_get_header(aData);
-        int64_t totalSize = sizeof(MPacketHeader) + header.dataSize + header.stringSize;
-
-        // check the received size
-        if (*aDataSize < totalSize) {
+    int64_t consumed = 0;
+    while (*aDataSize - consumed >= (int64_t)sizeof(MPacketHeader)) {
+        MPacketHeader header = wire_get_header(aData + consumed);
+        int64_t total = sizeof(MPacketHeader) + header.dataSize + header.stringSize;
+        if (total > aMaxDataSize) {
+            *aDataSize = 0;
+            connection->Disconnect(false);
             return;
         }
-
-        // process
-        MPacket::Process(connection, aData);
-
-        // shift the data array
-        int64_t j = 0;
-        for (int64_t i = totalSize; i < *aDataSize; i++) {
-            aData[j++] = aData[i];
-        }
-
-        // reduce the current buffer size
-        *aDataSize -= totalSize;
-        if (*aDataSize < 0) {
-            LOG_ERROR("Data size below zero!");
+        if (*aDataSize - consumed < total) break;
+        MPacket::Process(connection, aData + consumed);
+        consumed += total;
+        if (!connection->mActive || (gClient && gClient->mShutdown)) {
             *aDataSize = 0;
+            return;
         }
+    }
+    if (consumed) {
+        *aDataSize -= consumed;
+        memmove(aData, aData + consumed, *aDataSize);
     }
 }
 
@@ -721,7 +698,7 @@ bool MPacketStunTurn::Receive(Connection* connection) {
     std::string host     = mStringData[0];
     std::string username = mStringData[1];
     std::string password = mStringData[2];
-    LOG_INFO("[%" PRIu64 "] MPACKET_STUN_TURN received: isStun %u, host '%s', port %u, username '%s', password '%s'", connection->mId, mData.isStun, host.c_str(), mData.port, username.c_str(), password.c_str());
+    LOG_INFO("[%" PRIu64 "] MPACKET_STUN_TURN received: isStun %u, host '%s', port %u", connection->mId, mData.isStun, host.c_str(), mData.port);
 
     if (mData.isStun) {
         gClient->mStunServer.host = host;

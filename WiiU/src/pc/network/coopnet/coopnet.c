@@ -386,10 +386,9 @@ static void coopnet_populate_description(void) {
 }
 
 void ns_coopnet_update(void) {
+    coopnet_update(); // also completes deferred shutdown after the socket closes
     if (!coopnet_is_connected()) { return; }
-
-    coopnet_update();
-    if (gNetworkType == NT_CLIENT && sJoinPending && sJoinPendingStart > 0.0f) {
+    if (gNetworkType == NT_CLIENT && sJoinPending) {
         float now = clock_elapsed();
         float elapsed = now - sJoinPendingStart;
         if (now - sJoinPendingLastProgressLog >= 2.0f) {
