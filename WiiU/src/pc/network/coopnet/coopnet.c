@@ -35,6 +35,7 @@ char sCoopNetDescription[MAX_COOPNET_DESCRIPTION_LENGTH] = "";
 
 static uint64_t sLocalLobbyId = 0;
 static uint64_t sLocalLobbyOwnerId = 0;
+static bool sHostHandshakeStarted;
 static enum NetworkType sNetworkType;
 static bool sReconnecting = false;
 static bool sJoinPending = false;
@@ -43,18 +44,12 @@ static float sJoinPendingStart = 0.0f;
 static float sJoinPendingLastSend = 0.0f;
 static uint32_t sJoinPendingAttempts = 0;
 static float sJoinPendingLastProgressLog = 0.0f;
-static bool sClientModListRequested = false;
-static uint64_t sClientModListLobbyId = 0;
-static float sClientModListLastSend = 0.0f;
-static uint32_t sClientModListAttempts = 0;
 
 // Be conservative on Wii U/Cemu: public lobbies can take a while to answer and
 // overly aggressive retries/timeouts can cancel legitimate joins.
 #define COOPNET_JOIN_TIMEOUT_SECONDS 30.0f
 #define COOPNET_JOIN_RETRY_INTERVAL_SECONDS 8.0f
 #define COOPNET_JOIN_MAX_ATTEMPTS 3
-#define COOPNET_MODLIST_RETRY_INTERVAL_SECONDS 3.0f
-#define COOPNET_MODLIST_MAX_ATTEMPTS 10
 
 static CoopNetRc coopnet_initialize(void);
 
@@ -75,55 +70,9 @@ static void coopnet_clear_client_join_state(void) {
     sJoinPendingLastSend = 0.0f;
     sJoinPendingAttempts = 0;
     sJoinPendingLastProgressLog = 0.0f;
-    sClientModListRequested = false;
-    sClientModListLobbyId = 0;
-    sClientModListLastSend = 0.0f;
-    sClientModListAttempts = 0;
 }
 
-static void coopnet_try_send_mod_list_request(uint64_t lobbyId, const char* reason) {
-    if (gNetworkType != NT_CLIENT) { return; }
-    if (lobbyId == 0) { return; }
 
-    uint64_t hostUserId = (uint64_t)coopnet_raw_get_id(0);
-    if (hostUserId == 0) {
-#ifdef TARGET_WII_U
-        wiiu_coopnet_logf("coopnet: modlist deferred lobbyId=%llu reason=%s hostUserId=0\n",
-                          (unsigned long long)lobbyId, reason ? reason : "unknown");
-#endif
-        return;
-    }
-
-    if (sClientModListRequested && sClientModListLobbyId == lobbyId) {
-        if (sClientModListAttempts >= COOPNET_MODLIST_MAX_ATTEMPTS) {
-            return;
-        }
-        float now = clock_elapsed();
-        if ((now - sClientModListLastSend) < COOPNET_MODLIST_RETRY_INTERVAL_SECONDS) {
-            return;
-        }
-    } else {
-        sClientModListAttempts = 0;
-    }
-
-    network_send_mod_list_request();
-    sClientModListRequested = true;
-    sClientModListLobbyId = lobbyId;
-    sClientModListLastSend = clock_elapsed();
-    sClientModListAttempts++;
-
-    if (sJoinPending && sJoinPendingLobbyId == lobbyId) {
-        sJoinPendingStart = clock_elapsed();
-        sJoinPendingLastProgressLog = sJoinPendingStart - 2.0f;
-    }
-#ifdef TARGET_WII_U
-    wiiu_coopnet_logf("coopnet: modlist request lobbyId=%llu reason=%s hostUserId=%llu attempt=%u\n",
-                      (unsigned long long)lobbyId,
-                      reason ? reason : "unknown",
-                      (unsigned long long)hostUserId,
-                      (unsigned)sClientModListAttempts);
-#endif
-}
 
 bool ns_coopnet_query(QueryCallbackPtr callback, QueryFinishCallbackPtr finishCallback, const char* password) {
     gCoopNetCallbacks.OnLobbyListGot = callback;
@@ -171,6 +120,10 @@ static void coopnet_on_peer_connected(uint64_t peerId) {
     wiiu_coopnet_logf("coopnet: peer connected peerId=%llu\n", (unsigned long long)peerId);
 #endif
     LOG_INFO("coopnet peer connected peerId=%" PRIu64, peerId);
+    if (gNetworkType == NT_CLIENT && peerId == sLocalLobbyOwnerId && !gNetworkPlayerLocal && !sHostHandshakeStarted) {
+        sHostHandshakeStarted = true;
+        network_send_mod_list_request();
+    }
 }
 
 static void coopnet_on_load_balance(const char* host, uint32_t port) {
@@ -189,7 +142,7 @@ static void coopnet_on_receive(uint64_t userId, const uint8_t* data, uint64_t da
     u8 packetType = (dataLength > 0) ? data[0] : 0xFF;
     // Keep slot 0 aligned with the latest active sender, matching upstream
     // CoopDX semantics for "server" routing during pre-join handshakes.
-    coopnet_set_user_id(0, userId);
+    if (gNetworkType == NT_SERVER) coopnet_set_user_id(0, userId);
     u8 localIndex = coopnet_user_id_to_local_index(userId);
     if (localIndex == UNKNOWN_LOCAL_INDEX && gNetworkType == NT_SERVER) {
         localIndex = coopnet_reserve_user_id(userId);
@@ -248,7 +201,7 @@ static void coopnet_on_lobby_joined(uint64_t lobbyId, uint64_t userId, uint64_t 
                           (unsigned long long)userId,
                           (unsigned long long)lobbyId);
 #endif
-        coopnet_try_send_mod_list_request(lobbyId, "peer_snapshot");
+
         sJoinPending = false;
         sJoinPendingLobbyId = 0;
         sJoinPendingStart = 0.0f;
@@ -263,9 +216,7 @@ static void coopnet_on_lobby_joined(uint64_t lobbyId, uint64_t userId, uint64_t 
 
     coopnet_save_dest_id(userId, destId);
 
-    if (userId == localUserId && gNetworkType == NT_CLIENT) {
-        coopnet_try_send_mod_list_request(lobbyId, "self_joined");
-    }
+
 #ifdef DISCORD_SDK
     if (gDiscordInitialized) {
         discord_activity_update();
@@ -490,13 +441,7 @@ void ns_coopnet_update(void) {
             return;
         }
     }
-    if (gNetworkType == NT_CLIENT && sLocalLobbyId != 0 && gRemoteMods.entries == NULL) {
-        if (!sClientModListRequested) {
-            coopnet_try_send_mod_list_request(sLocalLobbyId, "post_join_poll");
-        } else if (sClientModListLobbyId == sLocalLobbyId) {
-            coopnet_try_send_mod_list_request(sLocalLobbyId, "retry_timer");
-        }
-    }
+
 
     if (gNetworkType != NT_NONE && sNetworkType != NT_NONE) {
         if (sNetworkType == NT_SERVER) {
@@ -522,6 +467,7 @@ void ns_coopnet_update(void) {
         } else if (sNetworkType == NT_CLIENT) {
             LOG_INFO("Join lobby");
             coopnet_clear_client_join_state();
+            sHostHandshakeStarted = false;
             CoopNetRc rc = coopnet_lobby_join(gCoopNetDesiredLobby, gCoopNetPassword);
 #ifdef TARGET_WII_U
             wiiu_coopnet_logf("coopnet: lobby_join rc=%d lobbyId=%llu pwlen=%u\n",
@@ -597,6 +543,7 @@ static void ns_coopnet_shutdown(bool reconnecting) {
 
     sLocalLobbyId = 0;
     sLocalLobbyOwnerId = 0;
+    sHostHandshakeStarted = false;
 }
 
 static CoopNetRc coopnet_initialize(void) {

@@ -156,7 +156,7 @@ void Peer::Connect(const char* aSdp) {
 }
 
 void Peer::SendSdp() {
-    juice_get_local_description(mAgent, mSdp, JUICE_MAX_SDP_STRING_LEN);
+    if (juice_get_local_description(mAgent, mSdp, JUICE_MAX_SDP_STRING_LEN) != 0) return;
     LOG_INFO("\n\nSend SDP (%" PRIu64 "):\n------------------\n%s\n------------------\n", mId, mSdp);
 
     MPacketPeerSdp(
@@ -170,8 +170,7 @@ bool Peer::Send(const uint8_t* aData, size_t aDataLength) {
         LOG_INFO("Refusing send because not yet connected to (%" PRIu64 ")\n", mId);
         return false;
     }
-    juice_send(mAgent, (const char*)aData, aDataLength);
-    return true;
+    return juice_send(mAgent, (const char*)aData, aDataLength) == 0;
 }
 
 void Peer::Disconnect() {

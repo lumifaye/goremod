@@ -25,6 +25,8 @@ void MPacket::Send(Connection&) { calls += 'S'; }
 bool MPacketPeerSdp::Receive(Connection*) { return true; }
 bool MPacketPeerCandidate::Receive(Connection*) { return true; }
 bool MPacketPeerCandidateDone::Receive(Connection*) { return true; }
+static int sendResult;
+extern "C" int juice_send(juice_agent_t*, const char*, size_t) { return sendResult; }
 static void on_connected(uint64_t) { ++connected; }
 static void on_disconnected(uint64_t) { ++disconnected; }
 int main() {
@@ -34,6 +36,7 @@ int main() {
     { Peer p(&c,10,1); assert(calls.empty()); p.Connect("sdp"); assert(calls=="RLSG"); p.CandidateDone(); assert(calls=="RLSGD");
       p.OnStateChanged(JUICE_STATE_GATHERING); p.OnStateChanged(JUICE_STATE_CONNECTING);
       p.OnStateChanged(JUICE_STATE_CONNECTED); p.OnStateChanged(JUICE_STATE_COMPLETED);
+      assert(p.Send(nullptr, 0)); sendResult=-1; assert(!p.Send(nullptr, 0));
       assert(connected==1); p.OnStateChanged(JUICE_STATE_DISCONNECTED); p.OnStateChanged(JUICE_STATE_FAILED); assert(disconnected==1); }
     calls.clear(); c.mCurrentUserId=10;
     { Peer p(&c,50,1); assert(calls=="LS"); calls.clear(); p.Connect("sdp"); assert(calls=="RG"); p.CandidateDone(); assert(calls=="RGD"); }
