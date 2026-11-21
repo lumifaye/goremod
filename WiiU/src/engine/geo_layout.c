@@ -446,7 +446,7 @@ void geo_layout_cmd_node_translation_rotation(void) {
             break;
         case 3:
             vec3s_copy(translation, gVec3sZero);
-            vec3s_set(rotation, 0, (cmdPos[1] << 15) / 180, 0);
+            vec3s_set(rotation, 0, (cur_geo_cmd_s16(0x02) * 32768) / 180, 0);
             cmdPos += 2 << CMD_SIZE_SHIFT;
             break;
     }
@@ -825,7 +825,8 @@ void geo_layout_cmd_node_switch_case_ext(void) {
         (GraphNodeFunc) geo_process_lua_function,
         0
     );
-    graphNode->fnNode.luaTokenIndex = cur_geo_cmd_u32(0x04);
+    // DynOS has already resolved the LUAV token into a native word.
+    graphNode->fnNode.luaTokenIndex = (u32)(uintptr_t)cur_geo_cmd_ptr(0x04);
 
     register_scene_graph_node(&graphNode->fnNode.node);
 
@@ -843,7 +844,8 @@ void geo_layout_cmd_node_generated_ext(void) {
         (GraphNodeFunc) geo_process_lua_function,
         cur_geo_cmd_s16(0x02) // parameter
     );
-    graphNode->fnNode.luaTokenIndex = cur_geo_cmd_u32(0x04);
+    // DynOS has already resolved the LUAV token into a native word.
+    graphNode->fnNode.luaTokenIndex = (u32)(uintptr_t)cur_geo_cmd_ptr(0x04);
 
     register_scene_graph_node(&graphNode->fnNode.node);
 

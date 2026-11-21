@@ -56,7 +56,8 @@ void network_send_join_request(void) {
     snprintf(version, MAX_VERSION_LENGTH, "%s", get_version());
     packet_write_bytes(&p, &version, sizeof(u8) * MAX_VERSION_LENGTH);
 
-    packet_write(&p, &configPlayerModel,   sizeof(u8));
+    u8 model = (u8)configPlayerModel;
+    packet_write(&p, &model, sizeof(model));
     packet_write(&p, &configPlayerPalette, sizeof(struct PlayerPalette));
     packet_write_bytes(&p, &configPlayerName, sizeof(u8) * MAX_CONFIG_STRING);
 
@@ -69,7 +70,7 @@ void network_receive_join_request(struct Packet* p) {
     LOG_INFO("received join request");
 
 #ifdef COOPNET
-    if (p->addr != NULL) {
+    if (gNetworkSystem == &gNetworkSystemCoopNet && p->addr != NULL) {
         uint64_t userId = 0;
         memcpy(&userId, p->addr, sizeof(userId));
         u8 reserved = coopnet_reserve_user_id(userId);
@@ -134,17 +135,17 @@ void network_send_join(struct Packet* joinRequestPacket) {
     packet_write_bytes(&p, &version, sizeof(u8) * MAX_VERSION_LENGTH);
     packet_write(&p, &globalIndex, sizeof(u8));
     packet_write(&p, &gCurrSaveFileNum, sizeof(s16));
-    packet_write(&p, &gServerSettings.playerInteractions, sizeof(u8));
-    packet_write(&p, &gServerSettings.bouncyLevelBounds, sizeof(u8));
+    packet_write(&p, &(u8){gServerSettings.playerInteractions}, sizeof(u8));
+    packet_write(&p, &(u8){gServerSettings.bouncyLevelBounds}, sizeof(u8));
     packet_write(&p, &gServerSettings.playerKnockbackStrength, sizeof(u8));
-    packet_write(&p, &gServerSettings.stayInLevelAfterStar, sizeof(u8));
+    packet_write(&p, &(u8){gServerSettings.stayInLevelAfterStar}, sizeof(u8));
     packet_write(&p, &gServerSettings.skipIntro, sizeof(u8));
     packet_write(&p, &gServerSettings.bubbleDeath, sizeof(u8));
     packet_write(&p, &gServerSettings.headlessServer, sizeof(u8));
     packet_write(&p, &gServerSettings.nametags, sizeof(u8));
     packet_write(&p, &gServerSettings.maxPlayers, sizeof(u8));
     packet_write(&p, &gServerSettings.pauseAnywhere, sizeof(u8));
-    packet_write(&p, &gServerSettings.pvpType, sizeof(u8));
+    packet_write(&p, &(u8){gServerSettings.pvpType}, sizeof(u8));
     packet_write_bytes(&p, eeprom, sizeof(u8) * 512);
 
     network_send_to(globalIndex, &p);
@@ -192,17 +193,22 @@ void network_receive_join(struct Packet* p) {
 
     packet_read(p, &myGlobalIndex, sizeof(u8));
     packet_read(p, &gCurrSaveFileNum, sizeof(s16));
-    packet_read(p, &gServerSettings.playerInteractions, sizeof(u8));
-    packet_read(p, &gServerSettings.bouncyLevelBounds, sizeof(u8));
+    u8 settingByte = 0;
+    packet_read(p, &settingByte, sizeof(settingByte));
+    gServerSettings.playerInteractions = settingByte;
+    packet_read(p, &settingByte, sizeof(settingByte));
+    gServerSettings.bouncyLevelBounds = settingByte;
     packet_read(p, &gServerSettings.playerKnockbackStrength, sizeof(u8));
-    packet_read(p, &gServerSettings.stayInLevelAfterStar, sizeof(u8));
+    packet_read(p, &settingByte, sizeof(settingByte));
+    gServerSettings.stayInLevelAfterStar = settingByte;
     packet_read(p, &gServerSettings.skipIntro, sizeof(u8));
     packet_read(p, &gServerSettings.bubbleDeath, sizeof(u8));
     packet_read(p, &gServerSettings.headlessServer, sizeof(u8));
     packet_read(p, &gServerSettings.nametags, sizeof(u8));
     packet_read(p, &gServerSettings.maxPlayers, sizeof(u8));
     packet_read(p, &gServerSettings.pauseAnywhere, sizeof(u8));
-    packet_read(p, &gServerSettings.pvpType, sizeof(u8));
+    packet_read(p, &settingByte, sizeof(settingByte));
+    gServerSettings.pvpType = settingByte;
     packet_read_bytes(p, eeprom, sizeof(u8) * 512);
 
     network_player_connected(NPT_SERVER, 0, 0, &DEFAULT_MARIO_PALETTE, "Player", "0");

@@ -18,7 +18,8 @@ void network_send_player_settings(void) {
     packet_init(&p, PACKET_PLAYER_SETTINGS, true, PLMT_NONE);
     packet_write(&p, &gNetworkPlayers[0].globalIndex, sizeof(u8));
     packet_write_bytes(&p, playerName, MAX_CONFIG_STRING * sizeof(u8));
-    packet_write(&p, &configPlayerModel, sizeof(u8));
+    u8 model = (u8)configPlayerModel;
+    packet_write(&p, &model, sizeof(model));
     packet_write_bytes(&p, &configPlayerPalette, sizeof(struct PlayerPalette));
 
     if (gNetworkPlayerLocal != NULL) {

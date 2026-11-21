@@ -342,21 +342,11 @@ static void smlua_install_compat_globals(void) {
     smlua_exec_buffer(sCompatGlobals, strlen(sCompatGlobals), "@compat_globals");
 }
 
-static bool smlua_path_ptr_is_plausible(const char* path) {
-#ifdef TARGET_WII_U
-    uintptr_t p = (uintptr_t)path;
-    return path != NULL && p >= 0x00100000u && p <= 0x7fffffffu;
-#else
-    // cachedPath is an owned string, not a Wii U guest address.
-    return path != NULL;
-#endif
-}
-
 int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bool isModInit) {
     int rc = LUA_OK;
     char localPath[SYS_MAX_PATH];
     const char *path = file->cachedPath;
-    if (!smlua_path_ptr_is_plausible(path)) {
+    if (path == NULL) {
         if (!mod || !mod_file_full_path(localPath, mod, file)) {
             LOG_LUA("Failed to resolve Lua script: '%s'", file->relativePath);
             return LUA_ERRFILE;

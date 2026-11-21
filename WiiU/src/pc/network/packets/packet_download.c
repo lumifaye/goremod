@@ -11,6 +11,7 @@
 #include "pc/debuglog.h"
 #include "pc/fs/fmem.h"
 #include "pc/network/coopnet/coopnet_id.h"
+#include "pc/network/coopnet/coopnet.h"
 #ifdef TARGET_WII_U
 #include <coreinit/debug.h>
 #include <stdarg.h>
@@ -297,7 +298,7 @@ void network_receive_download_request(struct Packet* p) {
     SOFT_ASSERT(gNetworkType == NT_SERVER);
 
 #ifdef COOPNET
-    if (p->localIndex == UNKNOWN_LOCAL_INDEX && p->addr != NULL) {
+    if (p->localIndex == UNKNOWN_LOCAL_INDEX && gNetworkSystem == &gNetworkSystemCoopNet && p->addr != NULL) {
         uint64_t userId = 0;
         memcpy(&userId, p->addr, sizeof(userId));
         u8 reserved = coopnet_reserve_user_id(userId);

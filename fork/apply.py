@@ -3761,6 +3761,19 @@ def apply(base, directory):
         shutil.rmtree(work, ignore_errors=True)
     game_title(t, base)
     version_and_lobbies(t, base)
+    # Older flat/VR receivers read an eight-byte wire size directly into size_t.
+    # On a 32-bit client that overwrites the next field during the mod handshake.
+    f = "src/pc/network/packets/packet_mod_list.c"
+    for target in ("mod", "file"):
+        old = "    packet_read(p, &%s->size, sizeof(u64));" % target
+        if old in t.read(f)[0]:
+            t.replace(f, old, "    u64 wireSize = 0;\n"
+                      "    packet_read(p, &wireSize, sizeof(wireSize));\n"
+                      "    if (p->error || wireSize >= MAX_MOD_SIZE) {\n"
+                      "        djui_popup_create(DLANG(NOTIF, DISCONNECT_BIG_MOD), 4);\n"
+                      "        network_shutdown(false, false, false, false);\n"
+                      "        return;\n    }\n"
+                      "    %s->size = (size_t)wireSize;" % target)
     no_update_checks(t, base)
     vr_for_everybody(t, base)
     vr_players_body(t)

@@ -100,7 +100,7 @@ void network_receive_mod_list_request(struct Packet* p) {
     LOG_INFO("received mod list request");
 
 #ifdef COOPNET
-    if (p->addr != NULL) {
+    if (gNetworkSystem == &gNetworkSystemCoopNet && p->addr != NULL) {
         uint64_t userId = 0;
         memcpy(&userId, p->addr, sizeof(userId));
         u8 reserved = coopnet_reserve_user_id(userId);
