@@ -3781,7 +3781,16 @@ def apply(base, directory):
     f = "src/pc/network/packets/packet_reliable.c"
     # Send an ACK to the actual sender even when another peer owns slot zero.
     t.before(f, "    network_send_to(0, &ack);", "    ack.addr = p->addr; // borrowed for this non-reliable send\n")
-    t.replace(f, "remove_node_from_list(head);", "remove_node_from_list(node);")
+    # Repository sources may already contain the fix; pinned upstream sources
+    # still need it. Validate the cleanup body rather than patching it twice.
+    reliable_text, _ = t.read(f)
+    cleanup_start = reliable_text.index("void network_forget_all_reliable(void)")
+    cleanup_end = reliable_text.index("void network_forget_all_reliable_from", cleanup_start)
+    cleanup = reliable_text[cleanup_start:cleanup_end]
+    if "remove_node_from_list(head);" in cleanup:
+        t.replace(f, "remove_node_from_list(head);", "remove_node_from_list(node);")
+    elif cleanup.count("remove_node_from_list(node);") != 1:
+        raise Problem("%s: unexpected reliable cleanup implementation" % f)
     f = "src/pc/network/network_player.c"
     t.replace(f, "if (!np->connected) { return; }", "if (np == NULL || !np->connected) { return; }")
     t.replace(f, "network_shutdown(false, false, true, false);\n        }\n\n        elapsed",

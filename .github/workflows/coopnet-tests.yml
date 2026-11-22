@@ -20,8 +20,11 @@ jobs:
         run: git fetch --no-tags --depth=1 origin fdfff4b17e812e6caa2724ce82bbcb4b796452c5
       - name: Exercise coordinator, ICE and UDP in both hosting directions
         run: python3 fork/tests/coopnet_integration_test.py
-      - name: Exercise game retry, acknowledgement and shutdown cleanup
+      - name: Check release staging for every game tree
+        run: python3 fork/tests/coopnet_staging_test.py
+      - name: Exercise game packet ordering, retry, acknowledgement and shutdown cleanup
         run: |
+          python3 fork/tests/coopnet_game_packets_test.py
           python3 fork/tests/coopnet_reliable_retry_test.py
           python3 fork/tests/coopnet_reliable_cleanup_test.py
           python3 fork/tests/coopnet_handshake_test.py
