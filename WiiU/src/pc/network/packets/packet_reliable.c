@@ -40,7 +40,7 @@ void network_forget_all_reliable(void) {
     while (node != NULL) {
         struct PacketLinkedList* next = node->next;
         if (!node->p.keepSendingAfterDisconnect) {
-            remove_node_from_list(head);
+            remove_node_from_list(node);
         }
         node = next;
     }
