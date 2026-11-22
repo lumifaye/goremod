@@ -13,6 +13,9 @@
 #include "pc/lua/utils/smlua_level_utils.h"
 #include "pc/lua/utils/smlua_anim_utils.h"
 #include "pc/djui/djui.h"
+#ifdef TARGET_WII_U
+#include "pc/djui/djui_popup.h"
+#endif
 #include "pc/fs/fmem.h"
 #include <string.h>
 #include <stdint.h>
@@ -41,10 +44,28 @@ struct Mod* gLuaActiveMod = NULL;
 struct ModFile* gLuaActiveModFile = NULL;
 struct Mod* gLuaLastHookMod = NULL;
 
+#ifdef TARGET_WII_U
+// Keep a few distinct errors visible without flooding the screen if a hook
+// fails every frame. Reset when Lua is reinitialized for another session.
+static char sWiiULuaErrors[3][192];
+#endif
+
 void smlua_platform_log_lua(const char* text) {
 #ifdef TARGET_WII_U
-    if (text != NULL && text[0] != '\0') {
-        SMLUA_WIIU_LOG("[LUA] %s\n", text);
+    if (text == NULL || text[0] == '\0') return;
+    SMLUA_WIIU_LOG("[LUA] %s\n", text);
+    if (gDjuiRoot == NULL) return;
+    char summary[192];
+    snprintf(summary, sizeof(summary), "%s", text);
+    for (int i = 0; i < 3; i++) {
+        if (strcmp(sWiiULuaErrors[i], summary) == 0) return;
+        if (sWiiULuaErrors[i][0] == '\0') {
+            memcpy(sWiiULuaErrors[i], summary, strlen(summary) + 1);
+            char popup[224];
+            snprintf(popup, sizeof(popup), "Lua error:\n%s", summary);
+            djui_popup_create(popup, 4);
+            return;
+        }
     }
 #else
     (void)text;
@@ -541,6 +562,9 @@ int smlua_load_script(struct Mod* mod, struct ModFile* file, u16 remoteIndex, bo
 
 void smlua_init(void) {
     smlua_shutdown();
+#ifdef TARGET_WII_U
+    memset(sWiiULuaErrors, 0, sizeof(sWiiULuaErrors));
+#endif
 
 #ifdef TARGET_WII_U
     smlua_wiiu_step("init_begin");

@@ -85,7 +85,7 @@ with tempfile.TemporaryDirectory() as tmp:
         custom = (root / port / 'src/pc/network/packets/packet_lua_custom.c').read_text()
         assert 'gGorePacketSender = p->localIndex;\n    smlua_call_event_hooks(HOOK_ON_PACKET_RECEIVE, modIndex, tableIndex);\n    gGorePacketSender = previousGorePacketSender;' in custom
         source = (root / port / 'src/pc/lua/smlua_functions.c').read_text()
-        start = source.index('extern int gGorePacketSender;')
-        end = source.index('void smlua_bind_functions(void)', start)
+        start = source.index('static int smlua_func_gore_packet_sender(')
+        end = source.index('\n}', start) + 2
         run_c(binding_pre + source[start:end] + binding_test, tmp, port)
 print('touch and sender tests passed')
