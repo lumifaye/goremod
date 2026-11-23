@@ -55,7 +55,7 @@
 #if defined(__ANDROID__)
 #define SHADER_BINARY_CACHE_MAGIC 0x534D5652u
 // Increment whenever generated GLSL or the on-disk format changes.
-#define SHADER_BINARY_CACHE_VERSION 20u
+#define SHADER_BINARY_CACHE_VERSION 22u
 #define SHADER_BINARY_CACHE_MAX_BYTES (1024u * 1024u)
 
 struct ShaderBinaryCacheHeader {
@@ -369,7 +369,7 @@ void gfx_opengl_performance_stats_get(
 
 // Position, two texture coordinates, fog, lightmap, and every supported
 // combiner input. Seven entries overflowed on legal multi-input materials.
-#define OPENGL_MAX_SHADER_ATTRIBUTES (5 + SHADER_INPUT_8 - SHADER_INPUT_1 + 1)
+#define OPENGL_MAX_SHADER_ATTRIBUTES (6 + SHADER_INPUT_8 - SHADER_INPUT_1 + 1)
 
 struct ShaderProgram {
     uint64_t hash;
@@ -388,6 +388,7 @@ struct ShaderProgram {
     GLint normal_enabled_location[2];
     GLint normal_strength_location;
     GLint normal_gloss_location;
+    GLint better_graphics_location;
     bool normal_uniform_valid[2];
     GLuint last_normal_texture_id[2];
     bool last_normal_enabled[2];
@@ -441,6 +442,8 @@ static struct GLTexture *opengl_tex[2];
 // the same shader and textures remain bound. Track the last value so the
 // sampler uniform is refreshed exactly once when the setting changes instead
 // of waiting for another texture selection.
+static bool opengl_better_graphics_state_valid = false;
+static bool opengl_better_graphics_state = false;
 static bool opengl_normal_maps_state_valid = false;
 static bool opengl_normal_maps_state = false;
 static bool opengl_normal_map_strength_state_valid = false;
@@ -760,6 +763,9 @@ static void gfx_opengl_load_shader(struct ShaderProgram *new_prg) {
     // cached combiner observes the current slider value.
     gfx_opengl_set_normal_map_strength(new_prg);
     gfx_opengl_set_normal_map_gloss(new_prg);
+    if (new_prg->better_graphics_location >= 0) {
+        gfx_queue_Uniform1i(new_prg->better_graphics_location, configBetterGraphics ? 1 : 0);
+    }
     gfx_opengl_vertex_array_set_attribs(new_prg);
     gfx_opengl_set_shader_uniforms(new_prg);
     gfx_opengl_set_texture_uniforms(new_prg, 0);
@@ -821,8 +827,25 @@ static void append_normal_map_shader(char *fs_buf, size_t *fs_len,
     append_line(fs_buf, fs_len, "float normalMapGlossPower = mix(48.0, 8.0, normalMapGloss);");
     append_line(fs_buf, fs_len, "float normalMapSpecular = min(pow(mappedLight, normalMapGlossPower) * normalMapGloss * 0.10, 0.12);");
 
+    // Experimental material response: three soft, colored lobes evaluated per
+    // pixel from the authored tangent-space normal. Subtract each flat-normal
+    // response so neutral maps do not repaint the original combiner. This is
+    // texture-space material lighting, not world-space shadow casting.
+    append_line(fs_buf, fs_len, "if (uBetterGraphics) {");
+    append_line(fs_buf, fs_len, "vec3 key = normalize(vec3(-0.45, 0.65, 0.85));");
+    append_line(fs_buf, fs_len, "vec3 fill = normalize(vec3(0.70, 0.20, 0.75));");
+    append_line(fs_buf, fs_len, "vec3 bounce = normalize(vec3(0.10, -0.80, 0.55));");
+    append_line(fs_buf, fs_len, "float k = max(dot(mapNormal, key), 0.0) - key.z;");
+    append_line(fs_buf, fs_len, "float f = max(dot(mapNormal, fill), 0.0) - fill.z;");
+    append_line(fs_buf, fs_len, "float b = max(dot(mapNormal, bounce), 0.0) - bounce.z;");
+    append_line(fs_buf, fs_len, "vec3 detail = vec3(0.48, 0.39, 0.29) * k + vec3(0.13, 0.20, 0.31) * f + vec3(0.12, 0.09, 0.06) * b;");
+    append_line(fs_buf, fs_len, "vec3 materialLight = clamp(vec3(1.0) + detail * normalMapStrength, vec3(0.68), vec3(1.30));");
+    append_line(fs_buf, fs_len, "float sheen = max(pow(max(dot(mapNormal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0), 24.0) - pow(normalize(key + vec3(0.0, 0.0, 1.0)).z, 24.0), 0.0);");
+    append_line(fs_buf, fs_len, "texel.rgb = texel.rgb * materialLight + vec3(1.0, 0.88, 0.72) * sheen * normalMapGloss * 0.12;");
+    append_line(fs_buf, fs_len, "} else {");
     append_line(fs_buf, fs_len, "texel.rgb *= normalMapRelief;");
     append_line(fs_buf, fs_len, "texel.rgb += vec3(normalMapSpecular);");
+    append_line(fs_buf, fs_len, "}");
     // Close the uNormalMap block.
     append_line(fs_buf, fs_len, "}");
 }
@@ -947,6 +970,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     bool opt_2cycle = cc->cm.use_2cycle;
     bool opt_light_map = cc->cm.light_map;
     bool world_geometry = cc->cm.world_geometry;
+    bool enhanced_lighting = cc->cm.enhanced_lighting;
     bool use_normal_map = ccf.used_textures[0] || ccf.used_textures[1];
 
 #ifdef USE_GLES
@@ -956,7 +980,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
 #endif
 
     char vs_buf[8192];
-    char fs_buf[12288];
+    char fs_buf[16384];
     size_t vs_len = 0;
     size_t fs_len = 0;
     size_t num_floats = 4;
@@ -968,6 +992,15 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(vs_buf, &vs_len, "#version 120");
 #endif
     append_line(vs_buf, &vs_len, "attribute vec4 aVtxPos;");
+    if (enhanced_lighting) {
+        append_line(vs_buf, &vs_len, "attribute vec3 aWorldNormal;");
+#ifdef USE_GLES
+        append_line(vs_buf, &vs_len, "varying mediump vec3 vWorldNormal;");
+#else
+        append_line(vs_buf, &vs_len, "varying vec3 vWorldNormal;");
+#endif
+        num_floats += 3;
+    }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             vs_len += sprintf(vs_buf + vs_len, "attribute vec2 aTexCoord%d;\n", t);
@@ -995,6 +1028,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         num_floats += opt_alpha ? 4 : 3;
     }
     append_line(vs_buf, &vs_len, "void main() {");
+    if (enhanced_lighting) append_line(vs_buf, &vs_len, "vWorldNormal = aWorldNormal;");
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             vs_len += sprintf(vs_buf + vs_len, "vTexCoord%d = aTexCoord%d;\n", t, t);
@@ -1022,6 +1056,13 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(fs_buf, &fs_len, "#version 120");
 #endif
 
+    if (enhanced_lighting) {
+#ifdef USE_GLES
+        append_line(fs_buf, &fs_len, "varying mediump vec3 vWorldNormal;");
+#else
+        append_line(fs_buf, &fs_len, "varying vec3 vWorldNormal;");
+#endif
+    }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
 #ifdef USE_GLES
@@ -1060,6 +1101,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         }
         append_line(fs_buf, &fs_len, "uniform float uNormalMapGloss;");
         append_line(fs_buf, &fs_len, "uniform float uNormalMapStrength;");
+        append_line(fs_buf, &fs_len, "uniform bool uBetterGraphics;");
     }
 
     // 3 point texture filtering
@@ -1229,6 +1271,22 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         if (i == 0 && opt_2cycle) {
             append_str(fs_buf, &fs_len, "texel = ");
         }
+    }
+
+    // Per-fragment world-space directional and hemisphere lighting. The
+    // interpolated model normal is renormalized per pixel; multiplication
+    // retains the authored lighting/colors and keeps true black black.
+    if (enhanced_lighting) {
+        append_line(fs_buf, &fs_len, "float normalLen2 = dot(vWorldNormal, vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if (normalLen2 > 0.000001) {");
+        append_line(fs_buf, &fs_len, "vec3 N = vWorldNormal * inversesqrt(normalLen2);");
+        append_line(fs_buf, &fs_len, "float sky = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);");
+        append_line(fs_buf, &fs_len, "float key = max(dot(N, normalize(vec3(-0.35, 0.80, 0.48))), 0.0);");
+        append_line(fs_buf, &fs_len, "float fill = max(dot(N, normalize(vec3(0.65, 0.30, -0.55))), 0.0);");
+        append_line(fs_buf, &fs_len, "float bounce = max(dot(N, normalize(vec3(0.15, -0.90, 0.25))), 0.0);");
+        append_line(fs_buf, &fs_len, "vec3 lighting = vec3(0.77, 0.76, 0.76) + sky * vec3(0.06, 0.09, 0.15) + key * vec3(0.30, 0.23, 0.16) + fill * vec3(0.08, 0.10, 0.16) + bounce * vec3(0.12, 0.08, 0.04);");
+        append_line(fs_buf, &fs_len, "texel.rgb *= clamp(lighting, vec3(0.72), vec3(1.30));");
+        append_line(fs_buf, &fs_len, "}");
     }
 
     if (use_normal_map) {
@@ -1512,6 +1570,11 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aVtxPos");
     prg->attrib_sizes[cnt] = 4;
     ++cnt;
+    if (enhanced_lighting) {
+        prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aWorldNormal");
+        prg->attrib_sizes[cnt] = 3;
+        ++cnt;
+    }
 
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
@@ -1555,6 +1618,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->texture_uniform_valid[1] = false;
     prg->normal_strength_location = -1;
     prg->normal_gloss_location = -1;
+    prg->better_graphics_location = -1;
     for (int t = 0; t < 2; t++) {
         prg->normal_sampler_location[t] = -1;
         prg->normal_enabled_location[t] = -1;
@@ -1588,6 +1652,10 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
                     glGetUniformLocation(shader_program, name);
                 gfx_queue_Uniform1i(prg->normal_sampler_location[t], 2 + t);
             }
+        }
+        prg->better_graphics_location = glGetUniformLocation(shader_program, "uBetterGraphics");
+        if (prg->better_graphics_location >= 0) {
+            gfx_queue_Uniform1i(prg->better_graphics_location, configBetterGraphics ? 1 : 0);
         }
         prg->normal_strength_location =
             glGetUniformLocation(shader_program, "uNormalMapStrength");
@@ -2039,6 +2107,8 @@ static void gfx_opengl_on_resize(void) {
 }
 
 static void gfx_opengl_sync_normal_maps_state(void) {
+    const bool better_changed = !opengl_better_graphics_state_valid ||
+        opengl_better_graphics_state != configBetterGraphics;
     const bool maps_changed =
         !opengl_normal_maps_state_valid ||
         opengl_normal_maps_state != (configVrNormalMaps || configBetterGraphics);
@@ -2048,10 +2118,12 @@ static void gfx_opengl_sync_normal_maps_state(void) {
     const bool gloss_changed =
         !opengl_normal_map_gloss_state_valid ||
         opengl_normal_map_gloss_state != configVrNormalMapGloss;
-    if (!maps_changed && !strength_changed && !gloss_changed) {
+    if (!maps_changed && !strength_changed && !gloss_changed && !better_changed) {
         return;
     }
 
+    opengl_better_graphics_state = configBetterGraphics;
+    opengl_better_graphics_state_valid = true;
     opengl_normal_maps_state = configVrNormalMaps || configBetterGraphics;
     opengl_normal_maps_state_valid = true;
     opengl_normal_map_strength_state = configVrNormalMapStrength;
@@ -2061,6 +2133,9 @@ static void gfx_opengl_sync_normal_maps_state(void) {
 
     if (opengl_prg == NULL) return;
 
+    if (better_changed && opengl_prg->better_graphics_location >= 0) {
+        gfx_queue_Uniform1i(opengl_prg->better_graphics_location, configBetterGraphics ? 1 : 0);
+    }
     if (strength_changed) {
         gfx_opengl_set_normal_map_strength(opengl_prg);
     }

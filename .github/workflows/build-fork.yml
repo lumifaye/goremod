@@ -90,14 +90,14 @@ jobs:
           grep -q "Launch in VR setting: OFF" starttest.txt
           bash ../fork/ci-embedded.sh starttest ../game ..
           rm -rf starttest starttest.txt || true
-          zip -q -r Realism64-Windows.zip Realism64
+          zip -q -r Realism64-Windows-VR-and-Flatscreen.zip Realism64
           STEP
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: realism64-pc-windows
-          path: out/Realism64-Windows.zip
+          name: realism64-windows-vr-and-flatscreen
+          path: out/Realism64-Windows-VR-and-Flatscreen.zip
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

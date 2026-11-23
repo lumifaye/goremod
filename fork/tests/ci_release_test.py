@@ -3,7 +3,7 @@ from pathlib import Path
 
 script = Path(__file__).resolve().parents[2] / 'fork/ci-release.sh'
 all_names = [
-    'Realism64-Windows.zip', 'Realism64-Linux.zip',
+    'Realism64-Windows-VR-and-Flatscreen.zip', 'Realism64-Linux.zip',
     'Realism64-macOS-AppleSilicon.zip', 'Realism64-macOS-Intel.zip',
     'Realism64-Android.apk', 'Realism64-VR-Quest.apk',
     'Realism64-WiiU.zip', 'SM64CoopDX-WiiU.zip', 'Realism64-WiiU.rpx', 'SM64CoopDX-WiiU.rpx',

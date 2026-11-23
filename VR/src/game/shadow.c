@@ -13,6 +13,7 @@
 #include "shadow.h"
 #include "sm64.h"
 #include "game/hardcoded.h"
+#include "pc/configfile.h"
 
 // Avoid Z-fighting
 #define find_floor_height_and_data 0.4 + find_floor_height_and_data
@@ -33,6 +34,9 @@ struct Shadow {
     f32 parentX;
     f32 parentY;
     f32 parentZ;
+    /* The contact shadow center; the display list is still relative to the caster. */
+    f32 centerX, centerZ;
+    bool directional;
     /* The y-position of the floor (or water or lava) underneath the object. */
     f32 floorHeight;
     /* Initial (unmodified) size of the shadow. */
@@ -233,6 +237,41 @@ f32 get_water_level_below_shadow(struct Shadow *s) {
     return waterLevel;
 }
 
+// Offset existing contact shadows away from the enhanced world-space key
+// light. These are projected decals, not geometry-derived shadow maps. Keep
+// the normal shadow if the receiver cannot be resolved consistently (ledge,
+// steep step, water, lava, or an unusually distant caster).
+static void project_directional_shadow(struct Shadow *s) {
+    if (!configBetterGraphics || gShadowAboveWaterOrLava || gMarioOnIceOrCarpet ||
+        sSurfaceTypeBelowShadow == SURFACE_BURNING || sMarioOnFlyingCarpet) return;
+    f32 height = s->parentY - s->floorHeight;
+    if (!isfinite(height) || height <= 1.0f || height > 600.0f) return;
+
+    // Same world-space key direction as the enhanced fragment shader:
+    // (-0.35, 0.80, 0.48). Project opposite it toward the receiver.
+    f32 x = s->parentX + height * (0.35f / 0.80f);
+    f32 z = s->parentZ - height * (0.48f / 0.80f);
+    struct FloorGeometry *floor = NULL;
+    f32 receiver = find_floor_height_and_data(x, s->parentY, z, &floor);
+    if (floor == NULL || !isfinite(receiver) || receiver < gLevelValues.floorLowerLimitShadow ||
+        floor->normalY <= 0.05f || receiver > s->parentY ||
+        fabsf(receiver - s->floorHeight) > 20.0f) return;
+    if (gEnvironmentRegions != NULL) {
+        f32 water = find_water_level(x, z);
+        if (water >= receiver && water <= s->parentY) return;
+    }
+    // find_floor_height_and_data uses a single shared scratch structure; copy
+    // its fields immediately and retain the original receiver on every failure.
+    s->centerX = x;
+    s->centerZ = z;
+    s->floorHeight = receiver;
+    s->floorNormalX = floor->normalX;
+    s->floorNormalY = floor->normalY;
+    s->floorNormalZ = floor->normalZ;
+    s->floorOriginOffset = floor->originOffset;
+    s->directional = true;
+}
+
 /**
  * Initialize a shadow. Return 0 on success, 1 on failure.
  *
@@ -249,6 +288,9 @@ s8 init_shadow(struct Shadow *s, f32 xPos, f32 yPos, f32 zPos, s16 shadowScale, 
     s->parentX = xPos;
     s->parentY = yPos;
     s->parentZ = zPos;
+    s->centerX = xPos;
+    s->centerZ = zPos;
+    s->directional = false;
 
     s->floorHeight = find_floor_height_and_data(s->parentX, s->parentY, s->parentZ, &floorGeometry);
 
@@ -279,6 +321,8 @@ s8 init_shadow(struct Shadow *s, f32 xPos, f32 yPos, f32 zPos, s16 shadowScale, 
         // You can't draw a shadow with no floor under you.
         return 1;
     }
+
+    project_directional_shadow(s);
 
     if (overwriteSolidity) {
         s->solidity = dim_shadow_with_distance(overwriteSolidity, yPos - s->floorHeight);
@@ -416,8 +460,8 @@ void calculate_vertex_xyz(s8 index, struct Shadow s, f32 *xPosVtx, f32 *yPosVtx,
     halfScale = (xCoordUnit * s.shadowScale) / 2.0;
     halfTiltedScale = (zCoordUnit * tiltedScale) / 2.0;
 
-    *xPosVtx = (halfTiltedScale * sinf(downwardAngle)) + (halfScale * cosf(downwardAngle)) + s.parentX;
-    *zPosVtx = (halfTiltedScale * cosf(downwardAngle)) - (halfScale * sinf(downwardAngle)) + s.parentZ;
+    *xPosVtx = (halfTiltedScale * sinf(downwardAngle)) + (halfScale * cosf(downwardAngle)) + s.centerX;
+    *zPosVtx = (halfTiltedScale * cosf(downwardAngle)) - (halfScale * sinf(downwardAngle)) + s.centerZ;
 
     if (gShadowAboveWaterOrLava) {
         *yPosVtx = s.floorHeight;
@@ -502,7 +546,7 @@ void make_shadow_vertex(Vtx *vertices, s8 index, struct Shadow s, s8 shadowVerte
         yPosVtx = extrapolate_vertex_y_position(s, xPosVtx, zPosVtx);
         f32 diff = fabs(oldYPosVtx - yPosVtx) / 5.0f;
         if (diff > 1) { diff = 1; }
-        solidity = 200 * (1.0f - diff);
+        solidity = (s.directional ? s.solidity : 200) * (1.0f - diff);
     }
     relX = xPosVtx - s.parentX;
     relY = yPosVtx - s.parentY;

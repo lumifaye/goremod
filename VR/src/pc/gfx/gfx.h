@@ -2,6 +2,8 @@
 #define GFX_H
 
 #include <math.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <assert.h>
 
 #define SUPPORT_CHECK(x) assert(x)
@@ -47,6 +49,8 @@ struct GfxVertex {
     uint8_t fog_z;
     uint8_t clip_rej;
     uint8_t world_geometry;
+    bool enhanced_normal_valid;
+    int8_t enhanced_normal[3];
 };
 
 struct GfxDimensions {

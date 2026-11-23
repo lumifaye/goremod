@@ -39,6 +39,7 @@
 #include "pc/gfx/gfx_normal_maps.h"
 
 #include "pc/gfx/gfx_cc.h"
+#include "gfx_enhanced_lighting.h"
 #include "pc/gfx/gfx_pc.h"
 #include "gfx_ui_quad_clip.h"
 #include "pc/gfx/gfx_rendering_api.h"
@@ -153,6 +154,8 @@ struct StereoVertexCacheEntry {
     int16_t u, v;
     struct RGBA color;
     uint8_t world_geometry;
+    bool enhanced_normal_valid;
+    int8_t enhanced_normal[3];
 };
 static struct StereoVertexCacheEntry sStereoVertexCache[MAX_STEREO_VERTEX_CACHE];
 static uint32_t sStereoEye = 2;
@@ -210,7 +213,7 @@ struct GfxDimensions gfx_current_dimensions = { 0 };
 
 static bool dropped_frame = false;
 
-static float buf_vbo[MAX_BUFFERED * (26 * 3)] = { 0.0f }; // 3 vertices in a triangle and 26 floats per vtx
+static float buf_vbo[MAX_BUFFERED * (64 * 3)] = { 0.0f }; // covers all combiner inputs and optional normals
 static size_t buf_vbo_len = 0;
 static size_t buf_vbo_num_tris = 0;
 
@@ -1191,9 +1194,13 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 d->fog_z = fog_z;
             }
             d->world_geometry = stereo_cache_entry->world_geometry;
+            d->enhanced_normal_valid = stereo_cache_entry->enhanced_normal_valid;
+            memcpy(d->enhanced_normal, stereo_cache_entry->enhanced_normal, sizeof(d->enhanced_normal));
             continue;
         }
 
+        d->enhanced_normal_valid = false;
+        memset(d->enhanced_normal, 0, sizeof(d->enhanced_normal));
         short U = v->tc[0] * rsp.texture_scaling_factor.s >> 16;
         short V = v->tc[1] * rsp.texture_scaling_factor.t >> 16;
 
@@ -1273,28 +1280,20 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 }
             }
 
-            // Optional world-space hemisphere and warm directional fill.
-            // Only normally lit geometry is affected; fullbright and HUD
-            // retain their original colors. No global/mod lighting is changed.
-            if (configBetterGraphics && !gFullbright) {
-                Vec3f worldPos = { v->ob[0], v->ob[1], v->ob[2] };
-                Vec3f worldNormal = { nx / 127.0f, ny / 127.0f, nz / 127.0f };
-                gfx_local_to_world_space(worldPos, worldNormal);
-                // Degenerate or zero-scale models must not produce NaNs.
-                float normalLengthSq = worldNormal[0] * worldNormal[0]
-                                     + worldNormal[1] * worldNormal[1]
-                                     + worldNormal[2] * worldNormal[2];
-                if (normalLengthSq > 0.000001f) {
-                    vec3f_normalize(worldNormal);
-                    float sky = (worldNormal[1] + 1.0f) * 0.5f;
-                    float sun = worldNormal[0] * -0.35f + worldNormal[1] * 0.8f + worldNormal[2] * 0.48f;
-                    if (sky < 0.0f) sky = 0.0f;
-                    if (sky > 1.0f) sky = 1.0f;
-                    if (sun < 0.0f) sun = 0.0f;
-                    if (sun > 1.0f) sun = 1.0f;
-                    r += 7.0f * sky + 24.0f * sun;
-                    g += 10.0f * sky + 19.0f * sun;
-                    b += 15.0f * sky + 12.0f * sun;
+            // Carry a world-space normal to the GPU for per-fragment scene
+            // lighting. Keep vanilla vertex colors untouched and skip invalid
+            // transforms, fullbright and generated environment-map geometry.
+            if (configBetterGraphics && !gFullbright && sHasInverseCameraMatrix &&
+                !(rsp.geometry_mode & G_TEXTURE_GEN)) {
+                Vec3f position = { v->ob[0], v->ob[1], v->ob[2] };
+                Vec3f normal = { nx / 127.0f, ny / 127.0f, nz / 127.0f };
+                Vec3f worldNormal;
+                gfx_local_to_world_space(position, NULL); // primes the cached world matrix
+                if (gfx_enhanced_world_normal(sLocalToWorldMatrix, normal, worldNormal)) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        d->enhanced_normal[axis] = (int8_t)roundf(worldNormal[axis] * 127.0f);
+                    }
+                    d->enhanced_normal_valid = true;
                 }
             }
 
@@ -1474,6 +1473,8 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
             stereo_cache_entry->v = d->v;
             stereo_cache_entry->color = d->color;
             stereo_cache_entry->world_geometry = d->world_geometry;
+            stereo_cache_entry->enhanced_normal_valid = d->enhanced_normal_valid;
+            memcpy(stereo_cache_entry->enhanced_normal, d->enhanced_normal, sizeof(d->enhanced_normal));
         }
     }
 }
@@ -1596,6 +1597,10 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
                          (rdp.other_mode_l >> 30) == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
+    const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
+        (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
+        v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;
+    cm->enhanced_lighting = false;
 
     if (cm->texture_edge) {
         cm->use_alpha = true;
@@ -1609,6 +1614,17 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     }
 
     struct ColorCombiner *comb = gfx_lookup_or_create_color_combiner(cm);
+    if (want_enhanced_lighting) {
+        // GLES2 guarantees only eight attribute and varying vectors. Keep a
+        // safe fallback for unusually complex mod combiners instead of
+        // producing a shader that cannot link on Quest/older GPUs.
+        unsigned attributes = 2 + comb->num_inputs + comb->used_textures[0] +
+            comb->used_textures[1] + cm->use_fog + cm->light_map;
+        if (attributes <= 8) {
+            cm->enhanced_lighting = true;
+            comb = gfx_lookup_or_create_color_combiner(cm);
+        }
+    }
     cm = &comb->cm;
 
     struct ShaderProgram *prg = comb->prg;
@@ -1681,6 +1697,10 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
         buf_vbo[buf_vbo_len++] = v_arr[i]->y;
         buf_vbo[buf_vbo_len++] = z;
         buf_vbo[buf_vbo_len++] = w;
+        if (cm->enhanced_lighting) {
+            for (int axis = 0; axis < 3; ++axis)
+                buf_vbo[buf_vbo_len++] = v_arr[i]->enhanced_normal[axis] / 127.0f;
+        }
         for (int32_t j = 0; j < 2; j++) {
             if (used_textures[j]) {
 
