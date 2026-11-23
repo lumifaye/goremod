@@ -2253,8 +2253,8 @@ void gfx_opengl_shadow_submit(const float *vertices, size_t count, const float c
 }
 bool gfx_opengl_shadow_ready(void) { return sShadowMap.valid; }
 
-void gfx_opengl_experimental_post(int width, int height, bool underwater) {
-    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f);
+void gfx_opengl_experimental_post(int width, int height, bool underwater, const float sun[2], bool sunVisible) {
+    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f, sun, sunVisible);
 }
 
 static void gfx_opengl_shutdown(void) {

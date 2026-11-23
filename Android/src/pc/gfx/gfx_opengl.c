@@ -33,6 +33,7 @@
 #include "gfx_cc.h"
 #include "gfx_rendering_api.h"
 #include "gfx_experimental_post.h"
+#include "gfx_shadow_map.h"
 #include "gfx_pc.h"
 
 #define TEX_CACHE_STEP 512
@@ -43,13 +44,14 @@ struct ShaderProgram {
     uint8_t num_inputs;
     bool used_textures[2];
     uint8_t num_floats;
-    GLint attrib_locations[7];
+    GLint attrib_locations[8];
     GLint uniform_locations[9];
-    uint8_t attrib_sizes[7];
+    uint8_t attrib_sizes[8];
     uint8_t num_attribs;
     bool used_noise;
     bool used_lightmap;
     bool world_geometry;
+    GLint shadow_sampler, shadow_center;
 };
 
 struct GLTexture {
@@ -125,6 +127,13 @@ static void gfx_opengl_load_shader(struct ShaderProgram *new_prg) {
     gfx_opengl_set_shader_uniforms(new_prg);
     gfx_opengl_set_texture_uniforms(new_prg, 0);
     gfx_opengl_set_texture_uniforms(new_prg, 1);
+    if (new_prg->shadow_sampler >= 0 && sShadowMap.valid) {
+        GLint active; glGetIntegerv(GL_ACTIVE_TEXTURE,&active);
+        glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D,sShadowMap.texture);
+        glUniform1i(new_prg->shadow_sampler,2);
+        glUniform3f(new_prg->shadow_center,sShadowMap.center[0],sShadowMap.center[1],sShadowMap.center[2]);
+        glActiveTexture(active);
+    }
 }
 
 static void append_str(char *buf, size_t *len, const char *str) {
@@ -265,6 +274,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     bool opt_2cycle = cc->cm.use_2cycle;
     bool opt_light_map = cc->cm.light_map;
     bool world_geometry = cc->cm.world_geometry;
+    bool shadow_receiver = cc->cm.shadow_receiver;
 
 #ifdef USE_GLES
     bool opt_dither = false;
@@ -285,6 +295,15 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(vs_buf, &vs_len, "#version 120");
 #endif
     append_line(vs_buf, &vs_len, ATTR " vec4 aVtxPos;");
+    if (shadow_receiver) {
+        append_line(vs_buf, &vs_len, ATTR " vec3 aShadowWorld;");
+#ifdef USE_GLES
+        append_line(vs_buf, &vs_len, VARYING_VS " highp vec3 vShadowWorld;");
+#else
+        append_line(vs_buf, &vs_len, VARYING_VS " vec3 vShadowWorld;");
+#endif
+        num_floats += 3;
+    }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             vs_len += sprintf(vs_buf + vs_len, ATTR " vec2 aTexCoord%d;\n", t);
@@ -308,6 +327,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         num_floats += opt_alpha ? 4 : 3;
     }
     append_line(vs_buf, &vs_len, "void main() {");
+    if (shadow_receiver) append_line(vs_buf, &vs_len, "vShadowWorld=aShadowWorld;");
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             vs_len += sprintf(vs_buf + vs_len, "vTexCoord%d = aTexCoord%d;\n", t, t);
@@ -328,7 +348,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     // Fragment shader
 #ifdef USE_GLES
     append_line(fs_buf, &fs_len, "#version 300 es");
-    append_line(fs_buf, &fs_len, "precision mediump float;");
+    append_line(fs_buf, &fs_len, shadow_receiver ? "precision highp float;" : "precision mediump float;");
 #else
     append_line(fs_buf, &fs_len, "#version 120");
 #endif
@@ -337,6 +357,14 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(fs_buf, &fs_len, "out vec4 fragColor;");
 #endif
 
+    if (shadow_receiver) {
+#ifdef USE_GLES
+        append_line(fs_buf, &fs_len, VARYING_FS " highp vec3 vShadowWorld;");
+#else
+        append_line(fs_buf, &fs_len, VARYING_FS " vec3 vShadowWorld;");
+#endif
+        append_line(fs_buf, &fs_len, "uniform sampler2D uShadowMap; uniform vec3 uShadowCenter;");
+    }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             fs_len += sprintf(fs_buf + fs_len, VARYING_FS " vec2 vTexCoord%d;\n", t);
@@ -505,6 +533,28 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "if (texel.a > 0.3) texel.a = 1.0; else discard;");
     }
 
+    if (shadow_receiver) {
+        append_line(fs_buf, &fs_len, "vec3 sp=vShadowWorld-uShadowCenter;");
+        append_line(fs_buf, &fs_len, "vec3 sl=normalize(vec3(-0.35,0.80,0.48));");
+        append_line(fs_buf, &fs_len, "vec3 sr=normalize(cross(vec3(0.0,1.0,0.0),sl));");
+        append_line(fs_buf, &fs_len, "vec3 su=cross(sl,sr);");
+        append_line(fs_buf, &fs_len, "vec3 sc=vec3(dot(sp,sr)/4800.0,dot(sp,su)/4800.0,-dot(sp,sl)/8000.0)*0.5+0.5;");
+        append_line(fs_buf, &fs_len, "if (sc.x>0.001 && sc.y>0.001 && sc.x<0.999 && sc.y<0.999 && sc.z>0.0 && sc.z<1.0) {");
+        append_line(fs_buf, &fs_len, "float visibility=0.0;");
+        append_line(fs_buf, &fs_len, "for (int sy=-1; sy<=1; ++sy) for (int sx=-1; sx<=1; ++sx) {");
+#ifdef USE_GLES
+        append_line(fs_buf, &fs_len, "vec3 shadowPacked=texture(uShadowMap,sc.xy+vec2(float(sx),float(sy))/2048.0).rgb;");
+#else
+        append_line(fs_buf, &fs_len, "vec3 shadowPacked=texture2D(uShadowMap,sc.xy+vec2(float(sx),float(sy))/2048.0).rgb;");
+#endif
+        append_line(fs_buf, &fs_len, "float closest=dot(shadowPacked,vec3(1.0,1.0/255.0,1.0/65025.0));");
+        append_line(fs_buf, &fs_len, "visibility += (sc.z-0.00125 <= closest) ? 1.0 : 0.0;");
+        append_line(fs_buf, &fs_len, "}");
+        append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.75,1.0,visibility/9.0);");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
+
     // TODO discard if alpha is 0?
 
     if (world_geometry) {
@@ -656,6 +706,10 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->attrib_sizes[cnt] = 4;
     ++cnt;
 
+    if (shadow_receiver) {
+        prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aShadowWorld");
+        prg->attrib_sizes[cnt] = 3; ++cnt;
+    }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
             char name[16];
@@ -731,6 +785,8 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     }
 
     prg->uniform_locations[8] = glGetUniformLocation(shader_program, "uFilter");
+    prg->shadow_sampler = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowMap") : -1;
+    prg->shadow_center = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowCenter") : -1;
 
     gfx_opengl_load_shader(prg);
 
@@ -932,11 +988,15 @@ static const char* gfx_opengl_get_name(void) {
     return "OpenGL";
 }
 
-void gfx_opengl_experimental_post(int width, int height, bool underwater) {
-    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f);
+void gfx_opengl_experimental_post(int width, int height, bool underwater, const float sun[2], bool sunVisible) {
+    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f, sun, sunVisible);
 }
 
+void gfx_opengl_shadow_submit(const float *vertices, size_t count, const float center[3]) { gfx_shadow_map_render(vertices,count,center); }
+bool gfx_opengl_shadow_ready(void) { return sShadowMap.valid; }
+
 static void gfx_opengl_shutdown(void) {
+    gfx_shadow_map_destroy();
     experimental_post_destroy();
 }
 

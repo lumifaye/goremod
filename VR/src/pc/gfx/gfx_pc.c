@@ -42,6 +42,7 @@
 
 #include "pc/gfx/gfx_cc.h"
 #include "gfx_wet_sheen.h"
+#include "gfx_experimental_sun.h"
 #include "gfx_enhanced_lighting.h"
 #include "pc/gfx/gfx_pc.h"
 #include "gfx_ui_quad_clip.h"
@@ -2981,8 +2982,12 @@ void gfx_end_frame_render(void) {
     if (!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api && !vr_is_active()) {
         const float *eye = gLakituState.pos;
         float water = find_water_level(eye[0], eye[2]);
+        float sun[2] = {0.5f, 0.5f};
+        bool sunVisible = sHasInverseCameraMatrix &&
+            gfx_experimental_sun_position(eye, gLakituState.focus, gFOVState.fov,
+                                          gfx_current_dimensions.aspect_ratio, sun);
         gfx_opengl_experimental_post(gfx_current_dimensions.width, gfx_current_dimensions.height,
-                                    eye[1] < water - 8.0f);
+                                    eye[1] < water - 8.0f, sun, sunVisible);
     }
 }
 

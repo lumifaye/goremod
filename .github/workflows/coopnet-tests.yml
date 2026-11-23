@@ -28,6 +28,7 @@ jobs:
           python3 fork/tests/experimental_post_test.py
           python3 fork/tests/directional_shadows_test.py
           python3 fork/tests/realtime_shadow_test.py
+          python3 fork/tests/flat_shadow_test.py
           python3 fork/tests/animation_bounds_test.py
           python3 fork/tests/ci_release_test.py
       - name: Exercise game packet ordering, retry, acknowledgement and shutdown cleanup

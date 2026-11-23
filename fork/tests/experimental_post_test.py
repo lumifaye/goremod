@@ -15,6 +15,26 @@ assert 'if (samples || width>maxTexture || height>maxTexture || !experimental_po
 assert 'glGetVertexAttribPointerv' in h and 'glVertexAttribPointer(0,size,type,normalized,stride,pointer)' in h
 assert 'glColorMask(colors[0],colors[1],colors[2],colors[3])' in h
 assert 'underwater*vec2(sin(' in h and 'vec3 glow=bright(' in h
+assert 'sunVisible*sunGate' in h and 'rays+=bright(rp)' in h
+sunheaders = [(root/p/'src/pc/gfx/gfx_experimental_sun.h').read_text() for p in ('PC','Android','VR')]
+assert sunheaders[0] == sunheaders[1] == sunheaders[2]
+program = sunheaders[0] + r"""
+#include <assert.h>
+int main(void) {
+    float eye[3]={0,0,0}, focus[3]={-0.35f,0.8f,0.48f}, uv[2]={0};
+    assert(gfx_experimental_sun_position(eye,focus,45.0f,1.5f,uv));
+    assert(fabsf(uv[0]-0.5f)<0.001f && fabsf(uv[1]-0.5f)<0.001f);
+    focus[0]=0.35f; focus[1]=-0.8f; focus[2]=-0.48f;
+    assert(!gfx_experimental_sun_position(eye,focus,45.0f,1.5f,uv));
+    focus[0]=focus[1]=focus[2]=0;
+    assert(!gfx_experimental_sun_position(eye,focus,45.0f,1.5f,uv));
+    assert(!gfx_experimental_sun_position(eye,focus,NAN,1.5f,uv));
+}
+"""
+with tempfile.TemporaryDirectory() as tmp:
+    exe=str(Path(tmp)/'sun-test')
+    subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-x','c','-','-lm','-o',exe],input=program.encode(),check=True)
+    subprocess.run([exe],check=True)
 if len(sys.argv) > 1:
     validator=str(Path(sys.argv[1]).resolve())
     getstrings=lambda s: ''.join(ast.literal_eval(x) for x in re.findall(r'"(?:[^"\\]|\\.)*"',s))

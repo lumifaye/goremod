@@ -16,6 +16,7 @@
 #include "pc/lua/smlua_hooks.h"
 #include "pc/utils/misc.h"
 #include "pc/debuglog.h"
+#include "pc/gfx/gfx_pc.h"
 #include "skybox.h"
 #include "first_person_cam.h"
 #include "course_table.h"
@@ -1297,7 +1298,7 @@ static void geo_process_shadow(struct GraphNodeShadow *node) {
     // Sanity check our stack index, If we above or equal to our stack size. Return to prevent OOB\.
     if ((gMatStackIndex + 1) >= MATRIX_STACK_SIZE) { LOG_ERROR("Preventing attempt to exceed the maximum size %i for our matrix stack with size of %i.", MATRIX_STACK_SIZE - 1, gMatStackIndex); return; }
 
-    if (gCurGraphNodeCamera != NULL && gCurGraphNodeObject != NULL) {
+    if (!gfx_realtime_shadow_available() && gCurGraphNodeCamera != NULL && gCurGraphNodeObject != NULL) {
         if (gCurGraphNodeHeldObject != NULL) {
             get_pos_from_transform_mtx(gCurGraphNodeObject->shadowPos, gMatStack[gMatStackIndex],
                                        *gCurGraphNodeCamera->matrixPtr);

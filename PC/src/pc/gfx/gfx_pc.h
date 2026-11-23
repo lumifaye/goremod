@@ -26,6 +26,7 @@ extern Color gFogColor;
 extern f32 gFogIntensity;
 
 extern bool gFullbright;
+bool gfx_realtime_shadow_available(void);
 
 extern int gShaderFlags[SHADER_FLAG_MAX];
 extern f32 gDefaultShaderFlagValues[SHADER_FLAG_MAX];

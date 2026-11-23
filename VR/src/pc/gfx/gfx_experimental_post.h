@@ -22,14 +22,17 @@ static bool experimental_post_init(void) {
     const char *vs = "#version 120\nattribute vec2 position; varying vec2 uv; void main(){uv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}";
     const char *fs = "#version 120\n"
 #endif
-        "uniform sampler2D image; uniform vec2 pixel; uniform float phase; uniform float underwater; varying vec2 uv;"
+        "uniform sampler2D image; uniform vec2 pixel; uniform float phase; uniform float underwater; uniform vec2 sun; uniform float sunVisible; varying vec2 uv;"
         "vec3 bright(vec2 p){vec3 c=texture2D(image,clamp(p,0.0,1.0)).rgb; return max(c-vec3(0.72),0.0);}"
         "void main(){vec2 p=uv;"
         "p += underwater*vec2(sin(uv.y*34.0+phase)*0.0025,sin(uv.x*29.0+phase*0.8)*0.0020);"
         "p=clamp(p,0.0,1.0); vec4 base=texture2D(image,p); vec2 d=pixel*5.0;"
         "vec3 glow=bright(p+vec2(d.x,0.0))+bright(p-vec2(d.x,0.0))+bright(p+vec2(0.0,d.y))+bright(p-vec2(0.0,d.y));"
         "glow+=bright(p+d)+bright(p-d)+bright(p+vec2(d.x,-d.y))+bright(p+vec2(-d.x,d.y));"
-        "gl_FragColor=vec4(min(base.rgb+glow*0.085,vec3(1.0)),base.a);}";
+        "vec3 rays=vec3(0.0); vec2 stepRay=(sun-p)*0.115; vec2 rp=p;"
+        "for(int i=0;i<7;i++){rp+=stepRay; rays+=bright(rp);}"
+        "float sunGate=smoothstep(0.05,0.25,dot(bright(sun),vec3(0.333)));"
+        "gl_FragColor=vec4(min(base.rgb+glow*0.085+rays*0.08*sunVisible*sunGate*vec3(1.0,0.9,0.7),vec3(1.0)),base.a);}";
     GLuint v=experimental_post_shader(GL_VERTEX_SHADER,vs), f=experimental_post_shader(GL_FRAGMENT_SHADER,fs);
     if (!v || !f) { if(v) glDeleteShader(v); if(f) glDeleteShader(f); return false; }
     GLuint p=glCreateProgram(); glAttachShader(p,v); glAttachShader(p,f); glBindAttribLocation(p,0,"position"); glLinkProgram(p);
@@ -38,7 +41,7 @@ static bool experimental_post_init(void) {
     sExperimentalPost.program=p; glGenTextures(1,&sExperimentalPost.texture); glGenBuffers(1,&sExperimentalPost.buffer);
     return sExperimentalPost.texture && sExperimentalPost.buffer;
 }
-static void experimental_post_render(int width, int height, bool underwater, float phase) {
+static void experimental_post_render(int width, int height, bool underwater, float phase, const float sun[2], bool sunVisible) {
     if (width <= 0 || height <= 0) return;
     GLint samples=0, maxTexture=0;
     glGetIntegerv(GL_SAMPLE_BUFFERS,&samples); glGetIntegerv(GL_MAX_TEXTURE_SIZE,&maxTexture);
@@ -68,6 +71,8 @@ static void experimental_post_render(int width, int height, bool underwater, flo
     glUniform2f(glGetUniformLocation(sExperimentalPost.program,"pixel"),1.0f/width,1.0f/height);
     glUniform1f(glGetUniformLocation(sExperimentalPost.program,"phase"),phase);
     glUniform1f(glGetUniformLocation(sExperimentalPost.program,"underwater"),underwater ? 1.0f : 0.0f);
+    glUniform2f(glGetUniformLocation(sExperimentalPost.program,"sun"),sun[0],sun[1]);
+    glUniform1f(glGetUniformLocation(sExperimentalPost.program,"sunVisible"),sunVisible && !underwater ? 1.0f : 0.0f);
     static const GLfloat quad[]={-1,-1, 1,-1, -1,1, 1,1};
     glBindBuffer(GL_ARRAY_BUFFER,sExperimentalPost.buffer); glBufferData(GL_ARRAY_BUFFER,sizeof(quad),quad,GL_STREAM_DRAW);
     glEnableVertexAttribArray(0); glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,(void *)0); glDrawArrays(GL_TRIANGLE_STRIP,0,4);

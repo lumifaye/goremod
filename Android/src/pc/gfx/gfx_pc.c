@@ -37,6 +37,8 @@
 
 #include "pc/gfx/gfx_cc.h"
 #include "gfx_wet_sheen.h"
+#include "gfx_experimental_sun.h"
+#include "gfx_shadow_range.h"
 #include "pc/gfx/gfx_pc.h"
 #include "pc/gfx/gfx_rendering_api.h"
 #include "pc/gfx/gfx_opengl.h"
@@ -117,7 +119,7 @@ struct GfxDimensions gfx_current_dimensions = { 0 };
 
 static bool dropped_frame = false;
 
-static float buf_vbo[MAX_BUFFERED * (26 * 3)] = { 0.0f }; // 3 vertices in a triangle and 26 floats per vtx
+static float buf_vbo[MAX_BUFFERED * (32 * 3)] = { 0.0f }; // up to 32 floats per vertex including shadow coordinates
 static size_t buf_vbo_len = 0;
 static size_t buf_vbo_num_tris = 0;
 
@@ -153,6 +155,10 @@ bool gShaderFlagsEnabled = true;
 // need inverse camera matrix to compute world space for lighting engine
 static Mat4 sInverseCameraMatrix;
 static bool sHasInverseCameraMatrix = false;
+#define GFX_SHADOW_MAX_VERTICES (250000 * 3)
+static float *sShadowVertices;
+static size_t sShadowVertexCount;
+static float sShadowCaptureCenter[3];
 
 // 4x4 pink-black checkerboard texture to indicate missing textures
 #define MISSING_W 4
@@ -819,6 +825,15 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
 #endif
 
         x = gfx_adjust_x_for_aspect_ratio(x);
+        d->shadow_world_valid = false;
+        if (configBetterGraphics && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
+            Vec3f world = {v->ob[0], v->ob[1], v->ob[2]};
+            gfx_local_to_world_space(world, NULL);
+            if (isfinite(world[0]) && isfinite(world[1]) && isfinite(world[2])) {
+                memcpy(d->shadow_world,world,sizeof(d->shadow_world));
+                d->shadow_world_valid = true;
+            }
+        }
 
         short U = v->tc[0] * rsp.texture_scaling_factor.s >> 16;
         short V = v->tc[1] * rsp.texture_scaling_factor.t >> 16;
@@ -1108,6 +1123,17 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     struct GfxVertex *v2 = &rsp.loaded_vertices[vtx2_idx];
     struct GfxVertex *v3 = &rsp.loaded_vertices[vtx3_idx];
     struct GfxVertex *v_arr[3] = {v1, v2, v3};
+    if (sShadowVertices && configBetterGraphics && !gFullbright &&
+        (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
+        !(rdp.other_mode_l & CVG_X_ALPHA) &&
+        v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
+        sShadowVertexCount + 3 <= GFX_SHADOW_MAX_VERTICES &&
+        gfx_shadow_triangle_in_range(v1->shadow_world,v2->shadow_world,v3->shadow_world,sShadowCaptureCenter,10000.0f)) {
+        for (int i=0;i<3;i++) {
+            memcpy(sShadowVertices+sShadowVertexCount*3,v_arr[i]->shadow_world,3*sizeof(float));
+            ++sShadowVertexCount;
+        }
+    }
 
     if (v1->clip_rej & v2->clip_rej & v3->clip_rej) {
         // The whole triangle lies outside the visible area
@@ -1195,6 +1221,10 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->use_fog        = (rdp.other_mode_l >> 30)                       == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
+    const bool want_shadow = configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api &&
+        gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
+        !(rdp.other_mode_l & CVG_X_ALPHA) && v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
+    cm->shadow_receiver = false;
 
     if (cm->texture_edge) {
         cm->use_alpha = true;
@@ -1208,6 +1238,12 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     }
 
     struct ColorCombiner *comb = gfx_lookup_or_create_color_combiner(cm);
+    if (want_shadow) {
+        uint8_t num_inputs; bool used_textures[2];
+        gfx_rapi->shader_get_info(comb->prg, &num_inputs, used_textures);
+        unsigned attributes = 1 + num_inputs + used_textures[0] + used_textures[1] + cm->use_fog + cm->light_map;
+        if (attributes < 8) { cm->shadow_receiver = true; comb = gfx_lookup_or_create_color_combiner(cm); }
+    }
     cm = &comb->cm;
 
     struct ShaderProgram *prg = comb->prg;
@@ -1258,6 +1294,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
         buf_vbo[buf_vbo_len++] = v_arr[i]->y;
         buf_vbo[buf_vbo_len++] = z;
         buf_vbo[buf_vbo_len++] = w;
+        if (cm->shadow_receiver) for (int axis=0;axis<3;axis++) buf_vbo[buf_vbo_len++] = v_arr[i]->shadow_world[axis];
         for (int32_t j = 0; j < 2; j++) {
             if (used_textures[j]) {
                 uint32_t tex_width = (rdp.texture_tile[j].lrs - rdp.texture_tile[j].uls + 4) / 4;
@@ -2154,7 +2191,23 @@ void gfx_run(Gfx *commands) {
 
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
+    if (gfx_rapi == &gfx_opengl_api) {
+        if (configBetterGraphics) {
+            if (!sShadowVertices) sShadowVertices=malloc((size_t)GFX_SHADOW_MAX_VERTICES*3*sizeof(float));
+            gfx_opengl_shadow_submit(sShadowVertices,sShadowVertexCount,sShadowCaptureCenter);
+            if (rendering_state.shader_program) {
+                gfx_rapi->unload_shader(rendering_state.shader_program);
+                rendering_state.shader_program = NULL;
+            }
+            memcpy(sShadowCaptureCenter,gLakituState.focus,sizeof(sShadowCaptureCenter));
+        } else gfx_opengl_shadow_submit(NULL,0,sShadowCaptureCenter);
+        sShadowVertexCount=0;
+    }
     gfx_run_dl(commands);
+}
+
+bool gfx_realtime_shadow_available(void) {
+    return configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api && gfx_opengl_shadow_ready();
 }
 
 void gfx_end_frame_render(void) {
@@ -2166,8 +2219,12 @@ void gfx_end_frame_render(void) {
     if (!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api && true) {
         const float *eye = gLakituState.pos;
         float water = find_water_level(eye[0], eye[2]);
+        float sun[2] = {0.5f, 0.5f};
+        bool sunVisible = sHasInverseCameraMatrix &&
+            gfx_experimental_sun_position(eye, gLakituState.focus, gFOVState.fov,
+                                          gfx_current_dimensions.aspect_ratio, sun);
         gfx_opengl_experimental_post(gfx_current_dimensions.width, gfx_current_dimensions.height,
-                                    eye[1] < water - 8.0f);
+                                    eye[1] < water - 8.0f, sun, sunVisible);
     }
 }
 
@@ -2185,6 +2242,7 @@ void gfx_end_frame(void) {
 }
 
 void gfx_shutdown(void) {
+    free(sShadowVertices); sShadowVertices=NULL; sShadowVertexCount=0;
     if (gfx_rapi) {
         if (gfx_rapi->shutdown) gfx_rapi->shutdown();
         gfx_rapi = NULL;
