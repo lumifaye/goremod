@@ -56,7 +56,7 @@
 #if defined(__ANDROID__)
 #define SHADER_BINARY_CACHE_MAGIC 0x534D5652u
 // Increment whenever generated GLSL or the on-disk format changes.
-#define SHADER_BINARY_CACHE_VERSION 23u
+#define SHADER_BINARY_CACHE_VERSION 24u
 #define SHADER_BINARY_CACHE_MAX_BYTES (1024u * 1024u)
 
 struct ShaderBinaryCacheHeader {
@@ -1314,8 +1314,8 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "float key = max(dot(N, normalize(vec3(-0.35, 0.80, 0.48))), 0.0);");
         append_line(fs_buf, &fs_len, "float fill = max(dot(N, normalize(vec3(0.65, 0.30, -0.55))), 0.0);");
         append_line(fs_buf, &fs_len, "float bounce = max(dot(N, normalize(vec3(0.15, -0.90, 0.25))), 0.0);");
-        append_line(fs_buf, &fs_len, "vec3 lighting = vec3(0.77, 0.76, 0.76) + sky * vec3(0.06, 0.09, 0.15) + key * vec3(0.30, 0.23, 0.16) + fill * vec3(0.08, 0.10, 0.16) + bounce * vec3(0.12, 0.08, 0.04);");
-        append_line(fs_buf, &fs_len, "texel.rgb *= clamp(lighting, vec3(0.72), vec3(1.30));");
+        append_line(fs_buf, &fs_len, "vec3 lighting = vec3(0.91, 0.90, 0.89) + sky * vec3(0.06, 0.09, 0.15) + key * vec3(0.30, 0.23, 0.16) + fill * vec3(0.08, 0.10, 0.16) + bounce * vec3(0.12, 0.08, 0.04);");
+        append_line(fs_buf, &fs_len, "texel.rgb *= clamp(lighting, vec3(0.85), vec3(1.35));");
         append_line(fs_buf, &fs_len, "}");
     }
 
@@ -1324,15 +1324,15 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "vec3 sl=normalize(vec3(-0.35,0.80,0.48));");
         append_line(fs_buf, &fs_len, "vec3 sr=normalize(cross(vec3(0.0,1.0,0.0),sl));");
         append_line(fs_buf, &fs_len, "vec3 su=cross(sl,sr);");
-        append_line(fs_buf, &fs_len, "vec3 sc=vec3(dot(sp,sr)/2400.0,dot(sp,su)/2400.0,-dot(sp,sl)/4000.0)*0.5+0.5;");
-        append_line(fs_buf, &fs_len, "if (sc.x>0.002 && sc.y>0.002 && sc.x<0.998 && sc.y<0.998 && sc.z>0.0 && sc.z<1.0) {");
+        append_line(fs_buf, &fs_len, "vec3 sc=vec3(dot(sp,sr)/4800.0,dot(sp,su)/4800.0,-dot(sp,sl)/8000.0)*0.5+0.5;");
+        append_line(fs_buf, &fs_len, "if (sc.x>0.001 && sc.y>0.001 && sc.x<0.999 && sc.y<0.999 && sc.z>0.0 && sc.z<1.0) {");
         append_line(fs_buf, &fs_len, "float visibility=0.0;");
         append_line(fs_buf, &fs_len, "for (int sy=-1; sy<=1; ++sy) for (int sx=-1; sx<=1; ++sx) {");
-        append_line(fs_buf, &fs_len, "vec3 shadowPacked=texture2D(uShadowMap,sc.xy+vec2(float(sx),float(sy))/1024.0).rgb;");
+        append_line(fs_buf, &fs_len, "vec3 shadowPacked=texture2D(uShadowMap,sc.xy+vec2(float(sx),float(sy))/2048.0).rgb;");
         append_line(fs_buf, &fs_len, "float closest=dot(shadowPacked,vec3(1.0,1.0/255.0,1.0/65025.0));");
-        append_line(fs_buf, &fs_len, "visibility += (sc.z-0.0025 <= closest) ? 1.0 : 0.0;");
+        append_line(fs_buf, &fs_len, "visibility += (sc.z-0.00125 <= closest) ? 1.0 : 0.0;");
         append_line(fs_buf, &fs_len, "}");
-        append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.55,1.0,visibility/9.0);");
+        append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.75,1.0,visibility/9.0);");
         append_line(fs_buf, &fs_len, "}");
     }
 

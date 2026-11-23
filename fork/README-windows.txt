@@ -13,8 +13,10 @@ remain unchanged by scene lighting. Unusually complex materials may fall back
 to the original scene lighting. A real-time GPU shadow map uses opaque scene geometry from the previous frame,
 with filtered shadows in a bounded area. Transparent and cutout materials,
 offscreen geometry, and unusually complex materials may not cast or receive
-shadows. Existing contact shadows remain. This can cost performance, especially
-in VR, and may show a one-frame delay on moving objects. Turn it off at any time. Existing normal-map
+shadows. Built-in contact shadow decals are removed while this setting is on,
+even if the GPU shadow map cannot initialize; turn it off to restore them. The
+larger shadow map uses more GPU memory and bandwidth. This can cost performance,
+especially in VR, and may show a one-frame delay on moving objects. Turn it off at any time. Existing normal-map
 strength and gloss controls adjust the material lighting.
 
 Keep the included files and folders next to the executable. You need your own

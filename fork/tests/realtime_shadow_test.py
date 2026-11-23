@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory() as tmp:
     subprocess.run([exe],check=True)
 # The same basis, extent and packed-depth convention must be used in both passes.
 shader=(root/'VR/src/pc/gfx/gfx_opengl.c').read_text()
-for token in ('-0.35,0.80,0.48','/2400.0','/4000.0','65025.0'):
+for token in ('-0.35,0.80,0.48','/4800.0','/8000.0','65025.0'):
     assert token in source and token in shader, token
 assert 'GL_DEPTH_TEST' in source and 'glFramebufferRenderbuffer' in source
 assert 'glDrawArrays(GL_TRIANGLES' in source and 'texture2D(uShadowMap' in shader
@@ -77,3 +77,13 @@ assert 'sStereoEye != 1' in pc and 'gfx_opengl_shadow_submit(sShadowVertices' in
 assert '(rsp.geometry_mode & G_ZBUFFER)' in pc and '(rdp.other_mode_l & Z_UPD)' in pc
 assert 'sShadowVertexCount + 3 <= GFX_SHADOW_MAX_VERTICES' in pc
 print('Real-time shadow map: mock GPU pass, failure fallback, stereo capture and matching projection: ok')
+
+# A larger map keeps the original world-space texel size as the coverage doubles.
+assert '#define GFX_SHADOW_MAP_SIZE 2048' in source and '/2048.0' in shader
+assert 'vec3(0.91, 0.90, 0.89)' in shader and 'mix(0.75,1.0,visibility/9.0)' in shader
+renderer=(root/'VR/src/game/rendering_graph_node.c').read_text()
+shadow_node=renderer[renderer.index('static void geo_process_shadow('):renderer.index('static s32 obj_is_in_view(', renderer.index('static void geo_process_shadow('))]
+assert 'const bool skipShadow =\n        configBetterGraphics ||' in shadow_node
+assert 'if (node->node.children != NULL)' in shadow_node and 'geo_process_node_and_siblings(node->node.children);' in shadow_node
+assert 'gfx_shadow_triangle_in_range(v1->shadow_world, v2->shadow_world,' in pc
+print('Enhanced mode suppresses legacy decals; brighter shading and extended coverage wired: ok')

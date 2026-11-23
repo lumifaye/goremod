@@ -109,6 +109,10 @@ int main(void) {
     m[0][0]=0; assert(!gfx_enhanced_world_normal(m,n,out));
     m[0][0]=NAN; assert(!gfx_enhanced_world_normal(m,n,out));
     m[0][0]=1; n[0]=n[1]=n[2]=0; assert(!gfx_enhanced_world_normal(m,n,out));
+    float center[3]={0,0,0}, a[3]={-20000,0,0}, b[3]={20000,0,0}, c[3]={0,20000,0};
+    assert(gfx_shadow_triangle_in_range(a,b,c,center,10000));
+    a[0]=b[0]=c[0]=10001; assert(!gfx_shadow_triangle_in_range(a,b,c,center,10000));
+    a[0]=10000; assert(gfx_shadow_triangle_in_range(a,b,c,center,10000));
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:

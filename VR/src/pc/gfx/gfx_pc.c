@@ -138,7 +138,7 @@ static struct RSP rsp;
 
 // One frame of visible opaque 3D triangles feeds the next shadow-map pass.
 // Capture is visual only, bounded independently of game objects/persistence.
-#define GFX_SHADOW_MAX_VERTICES (180000 * 3)
+#define GFX_SHADOW_MAX_VERTICES (250000 * 3)
 static float *sShadowVertices;
 static size_t sShadowVertexCount;
 static float sShadowCaptureCenter[3];
@@ -1513,11 +1513,8 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
         !(rdp.other_mode_l & CVG_X_ALPHA) &&
         v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
         sShadowVertexCount + 3 <= GFX_SHADOW_MAX_VERTICES) {
-        bool nearby = true;
-        for (int i=0; i<3; ++i) for (int axis=0; axis<3; ++axis) {
-            if (fabsf(v_arr[i]->shadow_world[axis] - sShadowCaptureCenter[axis]) > 5000.0f) nearby = false;
-        }
-        if (nearby) for (int i=0; i<3; ++i) {
+        if (gfx_shadow_triangle_in_range(v1->shadow_world, v2->shadow_world,
+                                         v3->shadow_world, sShadowCaptureCenter, 10000.0f)) for (int i=0; i<3; ++i) {
             memcpy(sShadowVertices + sShadowVertexCount * 3, v_arr[i]->shadow_world, 3*sizeof(float));
             ++sShadowVertexCount;
         }

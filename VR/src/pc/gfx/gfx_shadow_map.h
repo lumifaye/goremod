@@ -2,7 +2,7 @@
  * gfx_menu_target.h. The caller drains its triangle batch before use. */
 #ifndef GFX_SHADOW_MAP_H
 #define GFX_SHADOW_MAP_H
-#define GFX_SHADOW_MAP_SIZE 1024
+#define GFX_SHADOW_MAP_SIZE 2048
 static struct {
     GLuint framebuffer, texture, depth, program, vbo;
     GLint center_location;
@@ -31,7 +31,7 @@ static bool gfx_shadow_map_init(void) {
         "vec3 L=normalize(vec3(-0.35,0.80,0.48));"
         "vec3 R=normalize(cross(vec3(0.0,1.0,0.0),L));"
         "vec3 U=cross(L,R);"
-        "gl_Position=vec4(dot(p,R)/2400.0,dot(p,U)/2400.0,-dot(p,L)/4000.0,1.0);}",version);
+        "gl_Position=vec4(dot(p,R)/4800.0,dot(p,U)/4800.0,-dot(p,L)/8000.0,1.0);}",version);
     snprintf(fs, sizeof(fs), "%s"
         "void main(){float z=min(gl_FragCoord.z,0.999999);"
         "vec3 enc=fract(z*vec3(1.0,255.0,65025.0));"

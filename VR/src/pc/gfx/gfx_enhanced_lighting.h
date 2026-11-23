@@ -20,4 +20,16 @@ static inline bool gfx_enhanced_world_normal(const float m[4][4], const float n[
     for (int i = 0; i < 3; ++i) out[i] *= inv;
     return true;
 }
+// Conservative caster filtering: keep a triangle if its bounding box can
+// intersect the capture volume, including very large level polygons whose
+// vertices are all outside but whose interior crosses the volume.
+static inline bool gfx_shadow_triangle_in_range(const float a[3], const float b[3],
+                                                const float c[3], const float center[3], float radius) {
+    for (int axis = 0; axis < 3; ++axis) {
+        float low = center[axis] - radius, high = center[axis] + radius;
+        if ((a[axis] < low && b[axis] < low && c[axis] < low) ||
+            (a[axis] > high && b[axis] > high && c[axis] > high)) return false;
+    }
+    return true;
+}
 #endif
