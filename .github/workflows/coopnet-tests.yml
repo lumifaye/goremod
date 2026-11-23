@@ -31,6 +31,7 @@ jobs:
           python3 fork/tests/environment_graphics_test.py
           python3 fork/tests/directional_shadows_test.py
           python3 fork/tests/realtime_shadow_test.py
+          python3 fork/tests/shadow_stability_metal_test.py
           python3 fork/tests/flat_shadow_test.py
           python3 fork/tests/animation_bounds_test.py
           python3 fork/tests/ci_release_test.py

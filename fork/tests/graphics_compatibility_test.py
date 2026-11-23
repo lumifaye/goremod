@@ -7,7 +7,7 @@ for platform in ('PC','Android','VR'):
     header=(base/'configfile.h').read_text()
     ui=(base/'djui/djui_panel_display.c').read_text()
     gfx=(base/'gfx/gfx_pc.c').read_text()
-    default='true' if platform=='Android' else 'false'
+    default='false'
     assert f'configBetterGraphicsCompatibility    = {default};' in config
     assert '"better_graphics_compatibility"' in config and '&configBetterGraphicsCompatibility' in config
     assert 'extern bool configBetterGraphicsCompatibility;' in header

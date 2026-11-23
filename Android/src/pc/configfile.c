@@ -98,7 +98,7 @@ ConfigStick configStick = { 0 };
 enum GraphicsBackend configGraphicsBackend        = GAPI_GL;
 unsigned int configFiltering                      = 2; // 0 = Nearest, 1 = Bilinear, 2 = Trilinear
 bool         configBetterGraphics                 = false; // experimental; local only
-bool         configBetterGraphicsCompatibility    = true; // lighter path; local only
+bool         configBetterGraphicsCompatibility    = false; // lighter path; local only
 bool         configShowFPS                        = false;
 bool         configShowPing                       = false;
 enum RefreshRateMode configFramerateMode          = RRM_AUTO;

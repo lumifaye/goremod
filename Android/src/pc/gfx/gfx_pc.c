@@ -949,6 +949,20 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 r += 85.0f * wet; g += 92.0f * wet; b += 105.0f * wet;
             }
 
+            // The player's environment-mapped metal retains its authored
+            // reflection textures. Add a restrained view-dependent glint to
+            // its light response without repainting ordinary materials.
+            if (configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
+                (rsp.geometry_mode & G_TEXTURE_GEN)) {
+                Vec3f metalPos = {v->ob[0], v->ob[1], v->ob[2]};
+                Vec3f metalNormal = {nx / 127.0f, ny / 127.0f, nz / 127.0f};
+                gfx_local_to_world_space(metalPos, metalNormal);
+                float glint = gfx_wet_sheen(metalPos,metalNormal,gLakituState.pos);
+                r += 10.0f + 105.0f * glint;
+                g += 12.0f + 112.0f * glint;
+                b += 15.0f + 122.0f * glint;
+            }
+
             d->color.r = r > 255.0f ? 255 : (uint8_t)r;
             d->color.g = g > 255.0f ? 255 : (uint8_t)g;
             d->color.b = b > 255.0f ? 255 : (uint8_t)b;
@@ -2200,7 +2214,7 @@ void gfx_run(Gfx *commands) {
                 gfx_rapi->unload_shader(rendering_state.shader_program);
                 rendering_state.shader_program = NULL;
             }
-            memcpy(sShadowCaptureCenter,gLakituState.focus,sizeof(sShadowCaptureCenter));
+            gfx_shadow_stable_center(gLakituState.focus,sShadowCaptureCenter);
         } else gfx_opengl_shadow_submit(NULL,0,sShadowCaptureCenter);
         sShadowVertexCount=0;
     }

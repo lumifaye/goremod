@@ -29,10 +29,11 @@ static bool experimental_post_init(void) {
         "p=clamp(p,0.0,1.0); vec4 base=texture2D(image,p); vec2 d=pixel*5.0;"
         "vec3 glow=bright(p+vec2(d.x,0.0))+bright(p-vec2(d.x,0.0))+bright(p+vec2(0.0,d.y))+bright(p-vec2(0.0,d.y));"
         "glow+=bright(p+d)+bright(p-d)+bright(p+vec2(d.x,-d.y))+bright(p+vec2(-d.x,d.y));"
+        "vec2 wide=pixel*15.0; vec3 wideGlow=bright(p+vec2(wide.x,0.0))+bright(p-vec2(wide.x,0.0))+bright(p+vec2(0.0,wide.y))+bright(p-vec2(0.0,wide.y));"
         "vec3 rays=vec3(0.0); vec2 stepRay=(sun-p)*0.115; vec2 rp=p;"
         "for(int i=0;i<7;i++){rp+=stepRay; rays+=bright(rp);}"
         "float sunGate=smoothstep(0.05,0.25,dot(bright(sun),vec3(0.333)));"
-        "gl_FragColor=vec4(min(base.rgb+glow*0.085+rays*0.08*sunVisible*sunGate*vec3(1.0,0.9,0.7),vec3(1.0)),base.a);}";
+        "gl_FragColor=vec4(min(base.rgb+glow*0.085+wideGlow*0.025+rays*0.08*sunVisible*sunGate*vec3(1.0,0.9,0.7),vec3(1.0)),base.a);}";
     GLuint v=experimental_post_shader(GL_VERTEX_SHADER,vs), f=experimental_post_shader(GL_FRAGMENT_SHADER,fs);
     if (!v || !f) { if(v) glDeleteShader(v); if(f) glDeleteShader(f); return false; }
     GLuint p=glCreateProgram(); glAttachShader(p,v); glAttachShader(p,f); glBindAttribLocation(p,0,"position"); glLinkProgram(p);

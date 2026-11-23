@@ -14,7 +14,7 @@ assert '&& !vr_is_active()' in (root/'VR/src/pc/gfx/gfx_pc.c').read_text()
 assert 'if (samples || width>maxTexture || height>maxTexture || !experimental_post_init()) return;' in h
 assert 'glGetVertexAttribPointerv' in h and 'glVertexAttribPointer(0,size,type,normalized,stride,pointer)' in h
 assert 'glColorMask(colors[0],colors[1],colors[2],colors[3])' in h
-assert 'underwater*vec2(sin(' in h and 'vec3 glow=bright(' in h
+assert 'underwater*vec2(sin(' in h and 'vec3 glow=bright(' in h and 'wideGlow*0.025' in h
 assert 'sunVisible*sunGate' in h and 'rays+=bright(rp)' in h
 sunheaders = [(root/p/'src/pc/gfx/gfx_experimental_sun.h').read_text() for p in ('PC','Android','VR')]
 assert sunheaders[0] == sunheaders[1] == sunheaders[2]

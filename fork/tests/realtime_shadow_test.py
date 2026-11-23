@@ -80,7 +80,7 @@ print('Real-time shadow map: mock GPU pass, failure fallback, stereo capture and
 
 # A larger map keeps the original world-space texel size as the coverage doubles.
 assert '#define GFX_SHADOW_MAP_SIZE 2048' in source and '/2048.0' in shader
-assert 'vec3(0.91, 0.90, 0.89)' in shader and 'mix(0.75,1.0,visibility/9.0)' in shader
+assert 'vec3(0.91, 0.90, 0.89)' in shader and 'mix(0.75,1.0,visibility/9.0),shadowFade'  in shader
 renderer=(root/'VR/src/game/rendering_graph_node.c').read_text()
 shadow_node=renderer[renderer.index('static void geo_process_shadow('):renderer.index('static s32 obj_is_in_view(', renderer.index('static void geo_process_shadow('))]
 assert 'const bool skipShadow =\n        (configBetterGraphics && !configBetterGraphicsCompatibility) ||' in shadow_node

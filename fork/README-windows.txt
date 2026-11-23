@@ -9,13 +9,15 @@ in flat mode; DirectX-only hardware is not supported.
 Display settings include Experimental Better Graphics, off by default. It adds
 per-pixel world-space lighting on normally lit 3D geometry, plus per-pixel
 material lighting on textures with bundled normal maps. Normally lit player
-models get an approximate wet sheen above and below water; this is not a true
+models get an approximate wet sheen above and below water and a small glint on
+environment-mapped metal; this is not a true
 scene reflection. Flat-screen OpenGL adds subtle screen-space bloom, approximate bright-pixel
 sun rays and an underwater camera ripple (including the HUD); these are skipped on multisampled
 targets and in VR. Fullbright and HUD
 remain unchanged by scene lighting. Unusually complex materials may fall back
 to the original scene lighting. A real-time GPU shadow map uses opaque scene geometry from the previous frame,
-with filtered shadows in a bounded area. Transparent and cutout materials,
+with filtered shadows in a bounded area; texel stabilization and a soft edge
+reduce some camera-motion shimmer. Transparent and cutout materials,
 offscreen geometry, and unusually complex materials may not cast or receive
 shadows. Compatible opaque geometry also has subtle distance haze, animated
 underwater caustic highlights and tint, plus a view-dependent material sheen.

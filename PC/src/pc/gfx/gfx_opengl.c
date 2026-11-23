@@ -531,7 +531,9 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "float closest=dot(shadowPacked,vec3(1.0,1.0/255.0,1.0/65025.0));");
         append_line(fs_buf, &fs_len, "visibility += (sc.z-0.00125 <= closest) ? 1.0 : 0.0;");
         append_line(fs_buf, &fs_len, "}");
-        append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.75,1.0,visibility/9.0);");
+        append_line(fs_buf, &fs_len, "float shadowEdge=min(min(sc.x,1.0-sc.x),min(sc.y,1.0-sc.y));");
+        append_line(fs_buf, &fs_len, "float shadowFade=smoothstep(0.001,0.035,shadowEdge)*smoothstep(0.0,0.025,min(sc.z,1.0-sc.z));");
+        append_line(fs_buf, &fs_len, "texel.rgb *= mix(1.0,mix(0.75,1.0,visibility/9.0),shadowFade);");
         append_line(fs_buf, &fs_len, "}");
     }
 
