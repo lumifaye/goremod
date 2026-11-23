@@ -77,6 +77,10 @@
 #endif
 
 #include <SDL2/SDL.h>
+#ifdef TARGET_ANDROID
+#include <jni.h>
+#include <SDL2/SDL_system.h>
+#endif
 
 extern Vp gViewportFullscreen;
 
@@ -511,6 +515,25 @@ void* main_game_init(UNUSED void* dummy) {
 }
 
 #ifdef TARGET_ANDROID
+// Java owns the overlay; calls are marshalled to the UI thread by the activity.
+static void android_startup_message(const char *method, const char *text) {
+    JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
+    jobject activity = SDL_AndroidGetActivity();
+    if (!env || !activity) return;
+    jclass cls = (*env)->GetObjectClass(env, activity);
+    if (cls) {
+        jmethodID id = (*env)->GetMethodID(env, cls, method, text ? "(Ljava/lang/String;)V" : "()V");
+        if (id) {
+            if (text) {
+                jstring message = (*env)->NewStringUTF(env, text);
+                if (message) { (*env)->CallVoidMethod(env, activity, id, message); (*env)->DeleteLocalRef(env, message); }
+            } else (*env)->CallVoidMethod(env, activity, id);
+        }
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+        (*env)->DeleteLocalRef(env, cls);
+    }
+    (*env)->DeleteLocalRef(env, activity);
+}
 int SDL_main(int argc, char *argv[]) {
 #else
 int main(int argc, char *argv[]) {
@@ -524,8 +547,10 @@ int main(int argc, char *argv[]) {
     if (stat(gamedir, NULL) == -1) {
         mkdir(gamedir, 0770);
     }
-    // TODO: some way to inhibit this on launch if the apk doesn't contain updated/differing files?
+    android_startup_message("awaitStartupOverlay", NULL);
+    // Copy still happens on SDL's native thread, after the Java overlay draws.
     SDL_AndroidCopyAssetFilesToDir(basedir);
+    android_startup_message("setStartupStatus", "Assets copied! Starting the graphics thing...");
 #endif
 
     // handle terminal arguments
@@ -571,6 +596,10 @@ int main(int argc, char *argv[]) {
     }
 
     if (!gCLIOpts.hideLoadingScreen && !gCLIOpts.headless) render_early_loading_screen("Checking your ROM (please hold lol)");
+#ifdef TARGET_ANDROID
+    // The first SDL frame is ready; hand over to the in-engine status screen.
+    android_startup_message("hideStartupOverlay", NULL);
+#endif
 
     // render the rom setup screen
     if (!main_rom_handler()) {

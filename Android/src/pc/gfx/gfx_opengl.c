@@ -286,6 +286,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     bool opt_light_map = cc->cm.light_map;
     bool world_geometry = cc->cm.world_geometry;
     bool shadow_receiver = cc->cm.shadow_receiver;
+    bool enhanced_lighting = cc->cm.enhanced_lighting;
 
 #ifdef USE_GLES
     bool opt_dither = false;
@@ -306,6 +307,15 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(vs_buf, &vs_len, "#version 120");
 #endif
     append_line(vs_buf, &vs_len, ATTR " vec4 aVtxPos;");
+    if (enhanced_lighting) {
+        append_line(vs_buf, &vs_len, ATTR " vec3 aWorldNormal;");
+#ifdef USE_GLES
+        append_line(vs_buf, &vs_len, VARYING_VS " mediump vec3 vWorldNormal;");
+#else
+        append_line(vs_buf, &vs_len, VARYING_VS " vec3 vWorldNormal;");
+#endif
+        num_floats += 3;
+    }
     if (shadow_receiver) {
         append_line(vs_buf, &vs_len, ATTR " vec3 aShadowWorld;");
 #ifdef USE_GLES
@@ -338,6 +348,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         num_floats += opt_alpha ? 4 : 3;
     }
     append_line(vs_buf, &vs_len, "void main() {");
+    if (enhanced_lighting) append_line(vs_buf, &vs_len, "vWorldNormal=aWorldNormal;");
     if (shadow_receiver) append_line(vs_buf, &vs_len, "vShadowWorld=aShadowWorld;");
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
@@ -368,6 +379,13 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(fs_buf, &fs_len, "out vec4 fragColor;");
 #endif
 
+    if (enhanced_lighting) {
+#ifdef USE_GLES
+        append_line(fs_buf, &fs_len, VARYING_FS " mediump vec3 vWorldNormal;");
+#else
+        append_line(fs_buf, &fs_len, VARYING_FS " vec3 vWorldNormal;");
+#endif
+    }
     if (shadow_receiver) {
 #ifdef USE_GLES
         append_line(fs_buf, &fs_len, VARYING_FS " highp vec3 vShadowWorld;");
@@ -541,6 +559,23 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         }
     }
 
+    // Per-fragment world-space directional and hemisphere lighting. The
+    // interpolated model normal is renormalized per pixel; multiplication
+    // retains the authored lighting/colors and keeps true black black.
+    if (enhanced_lighting) {
+        append_line(fs_buf, &fs_len, "float normalLen2 = dot(vWorldNormal, vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if (normalLen2 > 0.000001) {");
+        append_line(fs_buf, &fs_len, "vec3 N = vWorldNormal * inversesqrt(normalLen2);");
+        append_line(fs_buf, &fs_len, "float sky = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);");
+        append_line(fs_buf, &fs_len, "float key = max(dot(N, normalize(vec3(-0.35, 0.80, 0.48))), 0.0);");
+        append_line(fs_buf, &fs_len, "float fill = max(dot(N, normalize(vec3(0.65, 0.30, -0.55))), 0.0);");
+        append_line(fs_buf, &fs_len, "float bounce = max(dot(N, normalize(vec3(0.15, -0.90, 0.25))), 0.0);");
+        append_line(fs_buf, &fs_len, "vec3 lighting = vec3(0.91, 0.90, 0.89) + sky * vec3(0.06, 0.09, 0.15) + key * vec3(0.30, 0.23, 0.16) + fill * vec3(0.08, 0.10, 0.16) + bounce * vec3(0.12, 0.08, 0.04);");
+        append_line(fs_buf, &fs_len, "texel.rgb *= clamp(lighting, vec3(0.85), vec3(1.35));");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
+
     if (opt_texture_edge && opt_alpha) {
         append_line(fs_buf, &fs_len, "if (texel.a > 0.3) texel.a = 1.0; else discard;");
     }
@@ -643,6 +678,17 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "}");
     }
 
+    if (shadow_receiver && enhanced_lighting) {
+        // A very small sky-colored Fresnel rim suggests material reflectance.
+        append_line(fs_buf, &fs_len, "vec3 envView=uEnvironmentEye-vShadowWorld;");
+        append_line(fs_buf, &fs_len, "float envViewLen=dot(envView,envView); float envNormalLen=dot(vWorldNormal,vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if(envViewLen>0.000001 && envNormalLen>0.000001){");
+        append_line(fs_buf, &fs_len, "float envFacing=max(dot(envView*inversesqrt(envViewLen),vWorldNormal*inversesqrt(envNormalLen)),0.0);");
+        append_line(fs_buf, &fs_len, "float envRim=pow(1.0-clamp(envFacing,0.0,1.0),4.0);");
+        append_line(fs_buf, &fs_len, "texel.rgb+=texel.rgb*vec3(0.025,0.035,0.05)*envRim;");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
     if (opt_fog) {
         if (opt_alpha) {
             append_line(fs_buf, &fs_len, "texel = vec4(mix(texel.rgb, vFog.rgb, vFog.a), texel.a);");
@@ -735,6 +781,10 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->attrib_sizes[cnt] = 4;
     ++cnt;
 
+    if (enhanced_lighting) {
+        prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aWorldNormal");
+        prg->attrib_sizes[cnt] = 3; ++cnt;
+    }
     if (shadow_receiver) {
         prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aShadowWorld");
         prg->attrib_sizes[cnt] = 3; ++cnt;

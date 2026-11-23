@@ -50,6 +50,8 @@ struct GfxVertex {
     uint8_t world_geometry;
     float shadow_world[3];
     bool shadow_world_valid;
+    bool enhanced_normal_valid;
+    int8_t enhanced_normal[3];
 };
 
 struct GfxDimensions {

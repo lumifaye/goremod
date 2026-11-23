@@ -12,7 +12,7 @@ for platform in ('PC','Android'):
     assert 'gfx_opengl_shadow_ready()' in pc and 'gfx_shadow_triangle_in_range' in pc
     assert 'sShadowVertexCount + 3 <= GFX_SHADOW_MAX_VERTICES' in pc
     assert '/4800.0' in src and '/8000.0' in src and '/4800.0' in caster and '/8000.0' in caster
-    assert 'if (attributes < 8)' in pc and 'shadow_receiver = false' in pc
+    assert 'attributes < 8' in pc and 'shadow_receiver = false' in pc
     features=cc[cc.index('void gfx_cc_get_features('):cc.index('void gfx_cc_print(')]
     helpers=src[src.index('static void append_str('):src.index('static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(')]
     gen=src[src.index('    struct CCFeatures ccf = { 0 };',src.index('static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(')):src.index("    vs_buf[vs_len] = '\\0';")]
@@ -35,6 +35,9 @@ GEN
     assert(vs_len<8192 && fs_len<8192);
     assert((strstr(vs_buf,"aShadowWorld;")!=NULL)==(bool)cc->cm.shadow_receiver);
     assert((strstr(fs_buf,"uniform sampler2D uShadowMap;")!=NULL)==(bool)cc->cm.shadow_receiver);
+#ifdef __ANDROID_ENHANCED_TEST
+    assert((strstr(vs_buf,"aWorldNormal;")!=NULL)==(bool)cc->cm.enhanced_lighting);
+#endif
     FILE *v=fopen("out.vert","w"), *f=fopen("out.frag","w");
     assert(v && f); fputs(vs_buf,v); fputs(fs_buf,f); fclose(v); fclose(f); (void)num_floats;
 }
@@ -48,8 +51,8 @@ int main(int argc,char **argv) {
     with tempfile.TemporaryDirectory() as tmp:
         for mode in ([],['-DUSE_GLES']):
             exe=str(Path(tmp)/'gen')
-            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I',str(base),*mode,'-x','c','-','-o',exe],input=program.encode(),check=True)
-            for flags in (0,1,2,16,32,64,128,129,255):
+            subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I',str(base),*mode,*(['-D__ANDROID_ENHANCED_TEST'] if platform == 'Android' else []),'-x','c','-','-o',exe],input=program.encode(),check=True)
+            for flags in (0,1,2,16,32,64,128,129,255,256,384,511):
                 subprocess.run([exe,str(flags)],cwd=tmp,check=True)
                 if len(sys.argv)>1:
 

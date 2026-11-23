@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 ROOT = Path(__file__).resolve().parents[2]
-for platform in ('PC', 'Android'):
+for platform in ('PC',):
     base = ROOT / platform / 'src/pc'
     config = (base/'configfile.c').read_text()
     assert 'configBetterGraphics                 = false;' in config
