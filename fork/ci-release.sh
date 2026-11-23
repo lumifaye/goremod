@@ -7,7 +7,6 @@ notes="$(mktemp)"
 all="Realism64-Windows-VR-and-Flatscreen.zip|Windows (flat + VR)|windows: unzip and run \`sm64coopdx.exe\` for flat screen or enable VR Mode in settings.
 Realism64-Linux.zip|Linux|linux (64-bit): unzip and run \`sm64coopdx\`. see the included README for dependencies
 Realism64-macOS-AppleSilicon.zip|Mac (Apple silicon)|apple silicon mac, macOS 11+
-Realism64-macOS-Intel.zip|Mac (Intel)|intel mac, macOS 11+
 Realism64-Android.apk|Android|android phones and tablets
 Realism64-VR-Quest.apk|Quest|quest: install with SideQuest or adb
 Realism64-WiiU.zip|Wii U|wii u: my realism version
@@ -55,6 +54,8 @@ fi
         echo "Realism64 is my version; SM64 Coop DX is the port without my realism changes. sound and voice chat haven't been tested on a console"
         echo
     fi
+    echo "macOS Intel is published separately when available: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/build-$GITHUB_RUN_NUMBER-macos-intel"
+    echo
     echo "you need your own Super Mario 64 US ROM, it isn't included"
 } > "$notes"
 

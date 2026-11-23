@@ -80,6 +80,7 @@ struct CombineMode {
             uint8_t light_map      : 1;
             uint8_t world_geometry : 1;
             uint8_t enhanced_lighting : 1;
+            uint8_t shadow_receiver : 1;
         };
         uint32_t flags;
     };

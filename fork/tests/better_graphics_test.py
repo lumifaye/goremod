@@ -118,7 +118,7 @@ with tempfile.TemporaryDirectory() as tmp:
 pcvr = (vrbase/'gfx/gfx_pc.c').read_text()
 assert 'v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid' in pcvr
 assert '(rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN)' in pcvr
-assert 'attributes <= 8' in pcvr
+assert 'attributes < 8' in pcvr
 assert 'stereo_cache_entry->enhanced_normal_valid = d->enhanced_normal_valid' in pcvr
 assert 'd->enhanced_normal_valid = stereo_cache_entry->enhanced_normal_valid' in pcvr
 assert 'buf_vbo[buf_vbo_len++] = v_arr[i]->enhanced_normal[axis] / 127.0f' in pcvr
@@ -151,6 +151,8 @@ static void test(struct ColorCombiner *cc) {
 GEN
     vs_buf[vs_len]=0; fs_buf[fs_len]=0;
     assert(vs_len < 8192 && fs_len < 16384);
+    assert((strstr(vs_buf,"attribute vec3 aShadowWorld;") != NULL) == (bool)cc->cm.shadow_receiver);
+    assert((strstr(fs_buf,"uniform sampler2D uShadowMap;") != NULL) == (bool)cc->cm.shadow_receiver);
     assert((strstr(vs_buf,"attribute vec3 aWorldNormal;") != NULL) == (bool)cc->cm.enhanced_lighting);
     assert((strstr(fs_buf,"texel.rgb *= clamp(lighting") != NULL) == (bool)cc->cm.enhanced_lighting);
 #ifdef USE_GLES
@@ -165,7 +167,7 @@ GEN
 int main(void) {
     unsigned seed=83741;
     for (unsigned i=0;i<4096;i++) {
-        struct ColorCombiner c={0}; c.cm.flags=i%256;
+        struct ColorCombiner c={0}; c.cm.flags=i%512;
         for (int j=0;j<16;j++) { seed^=seed<<13; seed^=seed>>17; seed^=seed<<5; c.shader_commands[j]=seed % (SHADER_NOISE+1); }
         test(&c);
     }

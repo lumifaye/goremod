@@ -26,6 +26,7 @@
 #include "engine/math_util.h"
 
 #include "game/object_helpers.h"
+#include "game/camera.h"
 #include "game/rendering_graph_node.h"
 
 #include "pc/configfile.h"
@@ -45,9 +46,7 @@
 #include "pc/gfx/gfx_rendering_api.h"
 #include "pc/gfx/gfx_screen_config.h"
 #include "pc/gfx/gfx_window_manager_api.h"
-#if defined(__ANDROID__)
 #include "pc/gfx/gfx_opengl.h"
-#endif
 
 #define G_TX_LOADTILE_6_UNKNOWN 6
 #define GFX_SHADER_CACHE_FILENAME "gfx_shader_cache.txt"
@@ -136,6 +135,14 @@ struct RSP {
     struct GfxVertex loaded_vertices[MAX_VERTICES + 4];
 };
 static struct RSP rsp;
+
+// One frame of visible opaque 3D triangles feeds the next shadow-map pass.
+// Capture is visual only, bounded independently of game objects/persistence.
+#define GFX_SHADOW_MAX_VERTICES (180000 * 3)
+static float *sShadowVertices;
+static size_t sShadowVertexCount;
+static float sShadowCaptureCenter[3];
+
 
 // The display list is replayed once per eye. Lighting, texture coordinates,
 // and vertex colors are eye-independent; retain those results from the first
@@ -1161,6 +1168,16 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
 
         x = gfx_adjust_x_for_aspect_ratio(x);
 
+        d->shadow_world_valid = false;
+        if (configBetterGraphics && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
+            Vec3f world = {v->ob[0], v->ob[1], v->ob[2]};
+            gfx_local_to_world_space(world, NULL);
+            if (isfinite(world[0]) && isfinite(world[1]) && isfinite(world[2])) {
+                memcpy(d->shadow_world, world, sizeof(d->shadow_world));
+                d->shadow_world_valid = true;
+            }
+        }
+
         if (stereo_cache_reuse) {
             // Projection, clip rejection, and fog remain eye-specific. Every
             // other loaded-vertex result is identical for the two eye passes.
@@ -1489,6 +1506,23 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     struct GfxVertex *v3 = &rsp.loaded_vertices[vtx3_idx];
     struct GfxVertex *v_arr[3] = {v1, v2, v3};
 
+    // Capture before camera-space culling: back-facing/offscreen triangles in
+    // the submitted scene can still cast onto a visible surface.
+    if (sShadowVertices && configBetterGraphics && !gFullbright && sStereoEye != 1 &&
+        (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
+        !(rdp.other_mode_l & CVG_X_ALPHA) &&
+        v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
+        sShadowVertexCount + 3 <= GFX_SHADOW_MAX_VERTICES) {
+        bool nearby = true;
+        for (int i=0; i<3; ++i) for (int axis=0; axis<3; ++axis) {
+            if (fabsf(v_arr[i]->shadow_world[axis] - sShadowCaptureCenter[axis]) > 5000.0f) nearby = false;
+        }
+        if (nearby) for (int i=0; i<3; ++i) {
+            memcpy(sShadowVertices + sShadowVertexCount * 3, v_arr[i]->shadow_world, 3*sizeof(float));
+            ++sShadowVertexCount;
+        }
+    }
+
     if (v1->clip_rej & v2->clip_rej & v3->clip_rej) {
         // The whole triangle lies outside the visible area
         if (diagnostic_eye >= 0) {
@@ -1600,7 +1634,12 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
         (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
         v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;
+    const bool want_shadow = configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api &&
+        gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) &&
+        (rdp.other_mode_l & Z_UPD) && !(rdp.other_mode_l & CVG_X_ALPHA) &&
+        v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
     cm->enhanced_lighting = false;
+    cm->shadow_receiver = false;
 
     if (cm->texture_edge) {
         cm->use_alpha = true;
@@ -1614,16 +1653,14 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     }
 
     struct ColorCombiner *comb = gfx_lookup_or_create_color_combiner(cm);
-    if (want_enhanced_lighting) {
-        // GLES2 guarantees only eight attribute and varying vectors. Keep a
-        // safe fallback for unusually complex mod combiners instead of
-        // producing a shader that cannot link on Quest/older GPUs.
-        unsigned attributes = 2 + comb->num_inputs + comb->used_textures[0] +
+    if (want_enhanced_lighting || want_shadow) {
+        // GLES2 guarantees eight attribute/varying vectors. Prefer actual
+        // shadow reception when both enhancements cannot fit.
+        unsigned attributes = 1 + comb->num_inputs + comb->used_textures[0] +
             comb->used_textures[1] + cm->use_fog + cm->light_map;
-        if (attributes <= 8) {
-            cm->enhanced_lighting = true;
-            comb = gfx_lookup_or_create_color_combiner(cm);
-        }
+        if (want_shadow && attributes < 8) { cm->shadow_receiver = true; ++attributes; }
+        if (want_enhanced_lighting && attributes < 8) { cm->enhanced_lighting = true; ++attributes; }
+        if (cm->shadow_receiver || cm->enhanced_lighting) comb = gfx_lookup_or_create_color_combiner(cm);
     }
     cm = &comb->cm;
 
@@ -1700,6 +1737,10 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
         if (cm->enhanced_lighting) {
             for (int axis = 0; axis < 3; ++axis)
                 buf_vbo[buf_vbo_len++] = v_arr[i]->enhanced_normal[axis] / 127.0f;
+        }
+        if (cm->shadow_receiver) {
+            for (int axis = 0; axis < 3; ++axis)
+                buf_vbo[buf_vbo_len++] = v_arr[i]->shadow_world[axis];
         }
         for (int32_t j = 0; j < 2; j++) {
             if (used_textures[j]) {
@@ -2886,6 +2927,22 @@ void gfx_run(Gfx *commands) {
 
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
+    if (gfx_rapi == &gfx_opengl_api && sStereoEye != 1) {
+        if (configBetterGraphics) {
+            if (!sShadowVertices) sShadowVertices = malloc((size_t)GFX_SHADOW_MAX_VERTICES * 3 * sizeof(float));
+            gfx_opengl_shadow_submit(sShadowVertices, sShadowVertexCount, sShadowCaptureCenter);
+            if (rendering_state.shader_program) {
+                gfx_rapi->unload_shader(rendering_state.shader_program);
+                rendering_state.shader_program = NULL;
+            }
+            sShadowCaptureCenter[0]=gLakituState.focus[0];
+            sShadowCaptureCenter[1]=gLakituState.focus[1];
+            sShadowCaptureCenter[2]=gLakituState.focus[2];
+        } else {
+            gfx_opengl_shadow_submit(NULL, 0, sShadowCaptureCenter);
+        }
+        sShadowVertexCount = 0;
+    }
     gfx_run_dl(commands);
     if (sStereoEye == 0) {
         sStereoVertexCount = sStereoVertexSerial;
@@ -2924,6 +2981,7 @@ void gfx_end_frame(void) {
 }
 
 void gfx_shutdown(void) {
+    free(sShadowVertices); sShadowVertices = NULL; sShadowVertexCount = 0;
     sShaderStartupWarmupComplete = false;
     if (sShaderCacheAppendFile != NULL) {
         fclose(sShaderCacheAppendFile);

@@ -4,7 +4,7 @@ from pathlib import Path
 script = Path(__file__).resolve().parents[2] / 'fork/ci-release.sh'
 all_names = [
     'Realism64-Windows-VR-and-Flatscreen.zip', 'Realism64-Linux.zip',
-    'Realism64-macOS-AppleSilicon.zip', 'Realism64-macOS-Intel.zip',
+    'Realism64-macOS-AppleSilicon.zip',
     'Realism64-Android.apk', 'Realism64-VR-Quest.apk',
     'Realism64-WiiU.zip', 'SM64CoopDX-WiiU.zip', 'Realism64-WiiU.rpx', 'SM64CoopDX-WiiU.rpx',
 ]
@@ -55,6 +55,39 @@ sys.exit(0)
     assert str(tmp / 'pc-only' / all_names[0]) in upload['args'] and '--clobber' in upload['args']
     assert '--prerelease' in edit['args'] and '--latest=false' in edit['args']
     assert 'console testing is limited' not in edit['notes']
+    # Intel is never attached to the main release even if its build wins the race.
+    result, calls = run('with-intel', all_names + ['Realism64-macOS-Intel.zip'])
+    assert result.returncode == 0
+    create = next(c for c in calls if c['args'][:2] == ['release', 'create'])
+    assert str(tmp / 'with-intel' / 'Realism64-macOS-Intel.zip') not in create['args']
+    assert '/releases/tag/build-23-macos-intel' in create['notes']
+    intel_folder = tmp / 'intel'; intel_folder.mkdir()
+    (intel_folder / 'Realism64-macOS-Intel.zip').write_text('artifact')
+    if log.exists(): log.unlink()
+    result = subprocess.run(['bash', str(script.parent/'ci-release-intel.sh'), str(intel_folder)], env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    create = next(c for c in calls if c['args'][:2] == ['release', 'create'])
+    assert create['args'][2] == 'build-23-macos-intel' and str(intel_folder/'Realism64-macOS-Intel.zip') in create['args']
+    assert '--prerelease' in create['args'] and 'macOS 10.15' in create['notes']
+    (intel_folder / 'Realism64-macOS-Intel.zip').unlink()
+    log.unlink()
+    result = subprocess.run(['bash', str(script.parent/'ci-release-intel.sh'), str(intel_folder)], env=env, text=True, capture_output=True)
+    assert result.returncode != 0 and not log.exists()
     result, calls = run('empty', [])
     assert result.returncode != 0 and not calls, 'empty build must not create a release'
+# Both release publishers run in the same workflow, but neither depends on
+# the other; the main release must not wait for the Intel build.
+workflow = (script.parent.parent / '.github/workflows/build-fork.yml').read_text()
+main_release = workflow[workflow.index('  release:\n'):workflow.index('  release_macos_intel:\n')]
+intel_release = workflow[workflow.index('  release_macos_intel:\n'):]
+assert 'needs: [pc, linux, macos, android, quest, wiiu]' in main_release
+assert 'macos_intel' not in main_release
+assert 'needs: [macos_intel]' in intel_release
+assert 'name: realism64-pc-macos-intel' in intel_release
+assert 'fork/ci-release-intel.sh built-intel' in intel_release
+apple_job = workflow[workflow.index('  macos:\n'):workflow.index('  macos_intel:\n')]
+intel_job = workflow[workflow.index('  macos_intel:\n'):workflow.index('  android:\n')]
+assert 'name: Apple silicon' in apple_job and 'name: Intel' not in apple_job
+assert 'name: Intel' in intel_job and 'name: Apple silicon' not in intel_job
 print('mock release tests passed')

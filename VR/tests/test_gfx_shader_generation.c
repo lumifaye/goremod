@@ -39,7 +39,7 @@ static GLuint compile(GLenum type, const char *source) {
 static void validate(struct ColorCombiner *cc, const char *vs, const char *fs, size_t vl, size_t fl) {
     struct CCFeatures features={0}; gfx_cc_get_features(cc,&features);
     unsigned attributes=1+features.used_textures[0]+features.used_textures[1]+
-        cc->cm.use_fog+cc->cm.light_map+features.num_inputs+cc->cm.enhanced_lighting;
+        cc->cm.use_fog+cc->cm.light_map+features.num_inputs+cc->cm.enhanced_lighting+cc->cm.shadow_receiver;
     assert(attributes<=OPENGL_MAX_SHADER_ATTRIBUTES);
     if(attributes>maxAttributes) maxAttributes=attributes;
     if (vl > maxVs) maxVs = vl;
@@ -97,7 +97,7 @@ int main(void) {
         {0,0,0,CC_TEXEL0,0,0,0,CC_NOISE}
     };
     for(unsigned pattern=0;pattern<sizeof(patterns)/sizeof(patterns[0]);++pattern) {
-        for(unsigned flags=0;flags<256;++flags) {
+        for(unsigned flags=0;flags<512;++flags) {
             struct ColorCombiner cc={0}; memcpy(cc.cm.all_values,patterns[pattern],16);
             cc.cm.flags=flags; gfx_generate_cc(&cc); generate(&cc);
         }
@@ -113,7 +113,7 @@ int main(void) {
             seed^=seed<<13; seed^=seed>>17; seed^=seed<<5;
             cc.cm.all_values[k]=(k%8<4 ? rgb : alpha)[seed%7];
         }
-        cc.cm.flags=n%256;
+        cc.cm.flags=n%512;
         if(n&1) cc.cm.all_values[8]=CC_COMBINED;
         if(n&2) cc.cm.all_values[12]=CC_COMBINEDA;
         gfx_generate_cc(&cc); generate(&cc);

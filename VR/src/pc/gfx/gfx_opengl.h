@@ -24,5 +24,7 @@ void gfx_opengl_performance_stats_get(
 #endif
 
 bool gfx_opengl_check_compatibility(void);
+void gfx_opengl_shadow_submit(const float *vertices, size_t count, const float center[3]);
+bool gfx_opengl_shadow_ready(void);
 
 #endif

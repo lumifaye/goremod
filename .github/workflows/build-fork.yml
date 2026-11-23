@@ -195,6 +195,102 @@ jobs:
             prefix: /opt/homebrew
             file: Realism64-macOS-AppleSilicon.zip
             artifact: realism64-pc-macos-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      PKG_CONFIG_PATH: ${{ matrix.prefix }}/lib/pkgconfig
+    steps:
+      - name: Check out the mod
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/VR/
+            !/Android/
+            !/WiiU/
+
+      - name: Install build tools
+        run: |
+          brew install make mingw-w64 pkg-config coreutils
+          ls "$(brew --prefix)"/bin/cpp-[0-9]* > /dev/null 2>&1 || brew install gcc
+          ls "$(brew --prefix)"/bin/cpp-[0-9]*
+
+      - name: Compile GLEW
+        run: |
+          cd "$RUNNER_TEMP"
+          export MACOSX_DEPLOYMENT_TARGET=${{ matrix.oldest }}
+          curl -f -L -o glew.tar.gz https://github.com/nigels-com/glew/releases/download/glew-2.2.0/glew-2.2.0.tgz
+          tar -xzf glew.tar.gz
+          cd glew-2.2.0
+          make SYSTEM=darwin CC="clang -arch ${{ matrix.arch }} -mmacosx-version-min=${{ matrix.oldest }}" GLEW_PREFIX=${{ matrix.prefix }} GLEW_DEST=${{ matrix.prefix }}
+          make install SYSTEM=darwin GLEW_PREFIX=${{ matrix.prefix }} GLEW_DEST=${{ matrix.prefix }}
+
+      - name: Compile SDL2
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -f -L -o SDL2.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
+          tar -xzf SDL2.tar.gz
+          cd SDL2-2.30.9
+          ./configure --prefix=${{ matrix.prefix }} CC="clang -arch ${{ matrix.arch }} -mmacosx-version-min=${{ matrix.oldest }}"
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Get the game and change it
+        run: python3 fork/apply.py pc game
+
+      - name: Build
+        run: bash fork/ci.sh "Build" gmake -C game OSX_BUILD=1 -j$(sysctl -n hw.ncpu)
+
+      - name: Pack
+        run: |
+          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
+          mkdir -p out
+          mv game/build/us_pc/sm64coopdx.app out/Realism64.app
+          cd out
+          app=Realism64.app
+          plutil -lint $app/Contents/Info.plist
+          plutil -p $app/Contents/Info.plist
+          test "$(plutil -extract NSMicrophoneUsageDescription raw $app/Contents/Info.plist | wc -c)" -gt 10
+          while IFS= read -r mod; do test -f "$app/Contents/Resources/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
+          otool -L $app/Contents/MacOS/sm64coopdx | tee "$RUNNER_TEMP/libs.txt"
+          if tail -n +2 "$RUNNER_TEMP/libs.txt" | grep -v -E '^[[:space:]]*(@executable_path|@rpath|@loader_path|/usr/lib/|/System/)'; then
+            echo "the program asks for a library that is not in the app"
+            exit 1
+          fi
+          lipo -archs $app/Contents/MacOS/sm64coopdx | grep -q -x "${{ matrix.arch }}"
+          codesign --force --deep --sign - $app
+          codesign --verify --deep --strict $app
+          here="$PWD"
+          mkdir -p "$RUNNER_TEMP/save"
+          (cd / && gtimeout 120 "$here/$app/Contents/MacOS/sm64coopdx" --headless --hide-loading-screen --savepath "$RUNNER_TEMP/save") > "$RUNNER_TEMP/start.txt" 2>&1 || true
+          tail -n 20 "$RUNNER_TEMP/start.txt"
+          grep -q "could not find valid vanilla us sm64 rom" "$RUNNER_TEMP/start.txt"
+          test ! -e "$app/Contents/Resources/mods/Gore-Hardmode"
+          bash ../fork/ci-embedded.sh "$RUNNER_TEMP/save" ../game ..
+          codesign --verify --deep --strict $app
+          echo "::notice title=macOS build (${{ matrix.name }})::starts as far as asking for the ROM; it asks for: $(tail -n +2 "$RUNNER_TEMP/libs.txt" | awk '{ printf "%s ", $1 }')"
+          ditto -c -k --keepParent $app "${{ matrix.file }}"
+          STEP
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/${{ matrix.file }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  macos_intel:
+    name: PC (macOS, ${{ matrix.name }})
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'macos')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build macos]')))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - name: Intel
             runner: macos-15-intel
             arch: x86_64
@@ -668,3 +764,32 @@ jobs:
         run: |
           ls -l built
           bash fork/ci.sh "Release" bash fork/ci-release.sh built
+
+
+  release_macos_intel:
+    name: Release (macOS Intel)
+    needs: [macos_intel]
+    if: needs.macos_intel.result == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/PC/
+            !/VR/
+            !/Android/
+            !/WiiU/
+      - name: Get Intel build
+        uses: actions/download-artifact@v4
+        with:
+          name: realism64-pc-macos-intel
+          path: built-intel
+      - name: Release Intel build separately
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash fork/ci.sh "Intel release" bash fork/ci-release-intel.sh built-intel

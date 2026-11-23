@@ -10,7 +10,7 @@ you need your own Super Mario 64 US ROM because it isn't included
 
 - windows (flat screen and PC VR): `Realism64-Windows-VR-and-Flatscreen.zip`
 - linux: `Realism64-Linux.zip`
-- mac: `Realism64-macOS-AppleSilicon.zip` or `Realism64-macOS-Intel.zip` (macOS 11 or newer)
+- mac: `Realism64-macOS-AppleSilicon.zip` (macOS 11+) or `Realism64-macOS-Intel.zip` (macOS 10.15+). Intel is published as a separate release in the same workflow run, so it does not delay the main release.
 - android: `Realism64-Android.apk`
 - quest: `Realism64-VR-Quest.apk`
 - wii u: `Realism64-WiiU.zip` (test build, console testing is limited)
@@ -27,7 +27,7 @@ linux needs SDL2, OpenGL, libcurl and zlib. on mac you might need to allow the u
 
 windows now uses one executable for flat screen and PC VR; enable VR Mode in settings when using a headset. It uses OpenGL in both modes and does not support DirectX-only hardware. Android installs separately. The Windows package doesn't include offline chat dictation.
 
-**Experimental Better Graphics** is in Display settings and defaults off. On Windows and Quest it adds per-pixel world-space lighting for normally lit 3D geometry, plus texture-space material lighting where bundled normal maps exist. Complex materials may fall back to original lighting; fullbright and HUD are excluded from scene lighting. PC/Linux/macOS and Android phone builds use the simpler vertex-lighting path. Existing circular contact shadows also shift with caster height and the enhanced light direction, with a safe fallback on special or uncertain surfaces. These are projected decals, not object-shaped shadow maps. It can cost performance and is not available on Wii U or Xbox 360.
+**Experimental Better Graphics** is in Display settings and defaults off. On Windows and Quest it adds per-pixel world-space lighting for normally lit 3D geometry, plus texture-space material lighting where bundled normal maps exist. Complex materials may fall back to original lighting; fullbright and HUD are excluded from scene lighting. PC/Linux/macOS and Android phone builds use the simpler vertex-lighting path. Windows and Quest also have an experimental GPU shadow map from submitted opaque scene triangles, with soft filtered real-time shadows. The map uses the previous rendered frame, a bounded area and triangle budget, and does not include transparent or cutout materials; unusually complex materials may not receive shadows. Existing contact shadows remain as a fallback. It can cost performance and is not available on Wii U or Xbox 360.
 
 ## platform field kits
 

@@ -10,9 +10,11 @@ Display settings include Experimental Better Graphics, off by default. It adds
 per-pixel world-space lighting on normally lit 3D geometry, plus per-pixel
 material lighting on textures with bundled normal maps. Fullbright and HUD
 remain unchanged by scene lighting. Unusually complex materials may fall back
-to the original scene lighting. Circular contact shadows shift with height
-and light direction, but are projected decals rather than object silhouettes.
-This can cost performance, especially in VR. Turn it off at any time. Existing normal-map
+to the original scene lighting. A real-time GPU shadow map uses opaque scene geometry from the previous frame,
+with filtered shadows in a bounded area. Transparent and cutout materials,
+offscreen geometry, and unusually complex materials may not cast or receive
+shadows. Existing contact shadows remain. This can cost performance, especially
+in VR, and may show a one-frame delay on moving objects. Turn it off at any time. Existing normal-map
 strength and gloss controls adjust the material lighting.
 
 Keep the included files and folders next to the executable. You need your own
