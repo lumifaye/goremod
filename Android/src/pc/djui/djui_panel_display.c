@@ -115,6 +115,7 @@ void djui_panel_display_create(struct DjuiBase* caller) {
 
         char* filterChoices[3] = { DLANG(DISPLAY, NEAREST), DLANG(DISPLAY, LINEAR), DLANG(DISPLAY, TRIPOINT) };
         djui_selectionbox_create(body, DLANG(DISPLAY, FILTERING), filterChoices, 3, &configFiltering, NULL);
+        djui_checkbox_create(body, "Experimental Better Graphics", &configBetterGraphics, NULL);
 
         int maxMsaa = gWindowApi->get_max_msaa();
         if (maxMsaa >= 2) {

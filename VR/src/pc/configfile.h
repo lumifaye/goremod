@@ -165,6 +165,7 @@ extern ConfigWindow configWindow;
 extern ConfigStick configStick;
 extern enum GraphicsBackend configGraphicsBackend;
 extern unsigned int configFiltering;
+extern bool configBetterGraphics;
 extern bool         configShowFPS;
 extern bool         configVrAutoStart;
 extern unsigned int configVrCameraMode;

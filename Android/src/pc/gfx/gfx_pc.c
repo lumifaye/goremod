@@ -894,6 +894,31 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 }
             }
 
+            // Optional world-space hemisphere and warm directional fill.
+            // Only normally lit geometry is affected; fullbright and HUD
+            // retain their original colors. No global/mod lighting is changed.
+            if (configBetterGraphics && !gFullbright) {
+                Vec3f worldPos = { v->ob[0], v->ob[1], v->ob[2] };
+                Vec3f worldNormal = { nx / 127.0f, ny / 127.0f, nz / 127.0f };
+                gfx_local_to_world_space(worldPos, worldNormal);
+                // Degenerate or zero-scale models must not produce NaNs.
+                float normalLengthSq = worldNormal[0] * worldNormal[0]
+                                     + worldNormal[1] * worldNormal[1]
+                                     + worldNormal[2] * worldNormal[2];
+                if (normalLengthSq > 0.000001f) {
+                    vec3f_normalize(worldNormal);
+                    float sky = (worldNormal[1] + 1.0f) * 0.5f;
+                    float sun = worldNormal[0] * -0.35f + worldNormal[1] * 0.8f + worldNormal[2] * 0.48f;
+                    if (sky < 0.0f) sky = 0.0f;
+                    if (sky > 1.0f) sky = 1.0f;
+                    if (sun < 0.0f) sun = 0.0f;
+                    if (sun > 1.0f) sun = 1.0f;
+                    r += 7.0f * sky + 24.0f * sun;
+                    g += 10.0f * sky + 19.0f * sun;
+                    b += 15.0f * sky + 12.0f * sun;
+                }
+            }
+
             d->color.r = r > 255.0f ? 255 : (uint8_t)r;
             d->color.g = g > 255.0f ? 255 : (uint8_t)g;
             d->color.b = b > 255.0f ? 255 : (uint8_t)b;

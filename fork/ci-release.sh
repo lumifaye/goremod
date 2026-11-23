@@ -4,11 +4,10 @@ tag="build-$GITHUB_RUN_NUMBER"
 commit="${GITHUB_SHA:0:7}"
 notes="$(mktemp)"
 
-all="Realism64-Windows.zip|Windows|windows: unzip and run \`sm64coopdx.exe\`.
+all="Realism64-Windows.zip|Windows (flat + VR)|windows: unzip and run \`sm64coopdx.exe\` for flat screen or enable VR Mode in settings.
 Realism64-Linux.zip|Linux|linux (64-bit): unzip and run \`sm64coopdx\`. see the included README for dependencies
 Realism64-macOS-AppleSilicon.zip|Mac (Apple silicon)|apple silicon mac, macOS 11+
 Realism64-macOS-Intel.zip|Mac (Intel)|intel mac, macOS 11+
-Realism64-VR-Windows.zip|Windows VR|windows vr: unzip and run \`SM64-Co-Op-DX-VR.exe\`.
 Realism64-Android.apk|Android|android phones and tablets
 Realism64-VR-Quest.apk|Quest|quest: install with SideQuest or adb
 Realism64-WiiU.zip|Wii U|wii u: my realism version

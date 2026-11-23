@@ -97,6 +97,7 @@ ConfigStick configStick = { 0 };
 // display settings
 enum GraphicsBackend configGraphicsBackend        = GAPI_GL;
 unsigned int configFiltering                      = 2; // 0 = Nearest, 1 = Bilinear, 2 = Trilinear
+bool         configBetterGraphics                 = false; // experimental; local only
 bool         configShowFPS                        = false;
 bool         configShowPing                       = false;
 enum RefreshRateMode configFramerateMode          = RRM_AUTO;
@@ -312,6 +313,7 @@ static const struct ConfigOption options[] = {
     // display settings
     {.name = "graphics_backend",               .type = CONFIG_TYPE_UINT, .uintValue = &configGraphicsBackend},
     {.name = "texture_filtering",              .type = CONFIG_TYPE_UINT, .uintValue = &configFiltering},
+    {.name = "better_graphics",                 .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphics},
     {.name = "show_fps",                       .type = CONFIG_TYPE_BOOL, .boolValue = &configShowFPS},
     {.name = "show_ping",                      .type = CONFIG_TYPE_BOOL, .boolValue = &configShowPing},
     {.name = "framerate_mode",                 .type = CONFIG_TYPE_UINT, .uintValue = &configFramerateMode},

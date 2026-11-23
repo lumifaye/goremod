@@ -16,10 +16,10 @@ permissions:
 
 jobs:
   pc:
-    name: PC (Windows)
+    name: Windows (flat screen and VR)
     if: >-
-      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'pc')) ||
-      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build pc]')))
+      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'pc' || inputs.builds == 'pcvr')) ||
+      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build pcvr]') || contains(github.event.head_commit.message, '[build pc]')))
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -38,7 +38,7 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /*
-            !/VR/
+            !/PC/
             !/Android/
             !/WiiU/
 
@@ -55,10 +55,11 @@ jobs:
             python3
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-glew
+            mingw-w64-x86_64-openxr-sdk
             mingw-w64-x86_64-SDL2
 
       - name: Get the game and change it
-        run: python3 fork/apply.py pc game
+        run: python3 fork/apply.py vr game
 
       - name: Build
         run: bash fork/ci.sh "Build" make -C game -j$(nproc)
@@ -66,17 +67,27 @@ jobs:
       - name: Pack
         run: |
           bash fork/ci.sh "Pack" bash -e -x <<'STEP'
-          mkdir -p out/Realism64
-          cd game/build/us_pc
-          cp -r dynos lang mods palettes discord_game_sdk.dll sm64coopdx.exe ../../../out/Realism64/
-          cd ../../../out
-          bash ../fork/ci-dlls.sh Realism64/sm64coopdx.exe Realism64
+          stage=out/Realism64
+          mkdir -p $stage/licenses
+          cd game
+          cp build/us_pc/sm64coopdx.exe ../$stage/sm64coopdx.exe
+          cp build/us_pc/discord_game_sdk.dll build/us_pc/normal_maps.bin ../$stage/
+          cp -r build/us_pc/dynos build/us_pc/lang build/us_pc/mods build/us_pc/palettes build/us_pc/sonic_shoes ../$stage/
+          bash ../fork/ci-dlls.sh ../$stage/sm64coopdx.exe ../$stage libopenxr_loader.dll
+          test -f ../$stage/libopenxr_loader.dll
+          sed "s/SM64-Co-Op-DX-VR.exe/sm64coopdx.exe/g" docs/PC-VR-PLAYER-GUIDE.txt > ../$stage/VR-GUIDE.txt
+          cp ../fork/README-windows.txt ../$stage/README.txt
+          cp release_notes.txt ../$stage/
+          sed "s/SM64-Co-Op-DX-VR.exe/sm64coopdx.exe/g" tools/Launch-VR-Diagnostics.cmd > ../$stage/Launch-VR-Diagnostics.cmd
+          cp docs/VR-SPEEDRUN.txt docs/PROPELLER-MUSHROOM.txt docs/PHYSICAL-JUMPING.txt docs/PHYSICAL-SWIMMING.txt docs/POWER-UP-SPAWN-WEIGHTS.txt ../$stage/
+          cd ../out
           while IFS= read -r mod; do test -f "Realism64/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
           test ! -e Realism64/mods/Gore-Hardmode
           mkdir -p starttest
           (timeout 120 Realism64/sm64coopdx.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
           tail -n 20 starttest.txt
           grep -q "could not find valid vanilla us sm64 rom" starttest.txt
+          grep -q "Launch in VR setting: OFF" starttest.txt
           bash ../fork/ci-embedded.sh starttest ../game ..
           rm -rf starttest starttest.txt || true
           zip -q -r Realism64-Windows.zip Realism64
@@ -274,90 +285,6 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: out/${{ matrix.file }}
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-  pcvr:
-    name: PC VR (Windows)
-    if: >-
-      (github.event_name == 'workflow_dispatch' && (inputs.builds == 'all' || inputs.builds == 'pcvr')) ||
-      (github.event_name == 'push' && (contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[build pcvr]')))
-    runs-on: windows-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - name: Keep line ends as they are
-        shell: bash
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-
-      - name: Check out the mod
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /*
-            !/PC/
-            !/Android/
-            !/WiiU/
-
-      - name: Install build tools
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: mingw64
-          update: true
-          install: >-
-            make
-            git
-            zip
-            unzip
-            python3
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-glew
-            mingw-w64-x86_64-openxr-sdk
-            mingw-w64-x86_64-SDL2
-
-      - name: Get the game and change it
-        run: python3 fork/apply.py vr game
-
-      - name: Build
-        run: bash fork/ci.sh "Build" make -C game -j$(nproc)
-
-      - name: Pack
-        run: |
-          bash fork/ci.sh "Pack" bash -e -x <<'STEP'
-          stage=out/Realism64-VR
-          mkdir -p $stage/licenses
-          cd game
-          cp build/us_pc/sm64coopdx.exe ../$stage/SM64-Co-Op-DX-VR.exe
-          cp build/us_pc/discord_game_sdk.dll build/us_pc/normal_maps.bin ../$stage/
-          cp -r build/us_pc/dynos build/us_pc/lang build/us_pc/mods build/us_pc/palettes build/us_pc/sonic_shoes ../$stage/
-          bash ../fork/ci-dlls.sh ../$stage/SM64-Co-Op-DX-VR.exe ../$stage libopenxr_loader.dll
-          test -f ../$stage/libopenxr_loader.dll
-          cp docs/PC-VR-PLAYER-GUIDE.txt ../$stage/README.txt
-          cp release_notes.txt tools/Launch-VR-Diagnostics.cmd ../$stage/
-          cp docs/VR-SPEEDRUN.txt docs/PROPELLER-MUSHROOM.txt docs/PHYSICAL-JUMPING.txt docs/PHYSICAL-SWIMMING.txt docs/POWER-UP-SPAWN-WEIGHTS.txt ../$stage/
-          cd ../out
-          while IFS= read -r mod; do test -f "Realism64-VR/mods/$mod/built-in.txt"; done < ../game/fork-built-in-mods.txt
-          test ! -e Realism64-VR/mods/Gore-Hardmode
-          mkdir -p starttest
-          (timeout 120 Realism64-VR/SM64-Co-Op-DX-VR.exe --headless --hide-loading-screen --savepath "$(cygpath -w "$PWD/starttest")" || true) > starttest.txt 2>&1
-          tail -n 20 starttest.txt
-          grep -q "could not find valid vanilla us sm64 rom" starttest.txt
-          bash ../fork/ci-embedded.sh starttest ../game ..
-          rm -rf starttest starttest.txt || true
-          zip -q -r Realism64-VR-Windows.zip Realism64-VR
-          STEP
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: realism64-pcvr-windows
-          path: out/Realism64-VR-Windows.zip
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -707,11 +634,11 @@ jobs:
 
   release:
     name: Release
-    needs: [pc, linux, macos, pcvr, android, quest, wiiu]
+    needs: [pc, linux, macos, android, quest, wiiu]
     if: >-
       always() && !cancelled() &&
       (needs.pc.result == 'success' || needs.linux.result == 'success' || needs.macos.result != 'skipped' ||
-       needs.pcvr.result == 'success' || needs.android.result == 'success' || needs.quest.result == 'success' ||
+       needs.android.result == 'success' || needs.quest.result == 'success' ||
        needs.wiiu.result != 'skipped')
     runs-on: ubuntu-22.04
     timeout-minutes: 20

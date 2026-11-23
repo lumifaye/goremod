@@ -881,39 +881,26 @@ s32 retrieve_animation_index(s32 frame, u16 **attributes) {
 }
 
 s16 retrieve_animation_value(struct Animation *animation, s32 frame, u16 **attributes) {
-    // validate attributes
-    if (!attributes) { return 0; }
+    if (animation == NULL || attributes == NULL || *attributes == NULL ||
+        animation->index == NULL || animation->values == NULL ||
+        animation->indexLength < 2 || animation->valuesLength == 0) { return 0; }
 
-    u16* attr = *attributes;
-    if (!attr) { return 0; }
+    // Custom models can have more animated parts than the saved animation.
+    // Compare addresses as integers: the renderer can skip attributes beyond
+    // the end, where subtracting pointers would itself be undefined.
+    uintptr_t base = (uintptr_t) animation->index;
+    uintptr_t current = (uintptr_t) *attributes;
+    if (current < base || (current - base) % sizeof(u16) != 0) { return 0; }
+    size_t offset = (current - base) / sizeof(u16);
+    if (offset >= animation->indexLength - 1) { return 0; }
 
-    size_t offset = attr - animation->index;
-    if ((offset + 1) >= animation->indexLength) { return 0; }
-
-    // validate frame
+    u16 *attr = *attributes;
+    *attributes = attr + 2;
+    if (attr[0] == 0) { return 0; }
     if (frame < 0) { frame = 0; }
-
-    // retrieve animation index
-    s32 index = 0;
-    if (frame < attr[0]) {
-        index = attr[1] + frame;
-    } else {
-        index = attr[1] + attr[0] - 1;
-    }
-
-    // clamp index
-    if (index < 0) { index = 0; }
-    if (index > (s32)animation->valuesLength) { index = animation->valuesLength - 1; }
-
-    *attributes += 2;
-
-    // keep attributes in bounds
-    offset = *attributes - animation->index;
-    if (offset >= animation->indexLength) {
-        *attributes = (u16*)&animation->index[animation->indexLength - 1];
-    }
-
-    return animation->values[index];
+    u32 sample = (u32) attr[1] + ((u32) frame < attr[0] ? (u32) frame : (u32) attr[0] - 1);
+    if (sample >= animation->valuesLength) { sample = animation->valuesLength - 1; }
+    return animation->values[sample];
 }
 
 /**
