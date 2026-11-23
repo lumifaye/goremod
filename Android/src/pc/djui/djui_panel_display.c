@@ -15,6 +15,20 @@ static u32 sMsaaSelection = 0;
 static u32 sMsaaOriginal = OPTION_ORIGINAL_UNSET;
 static u32 sGfxBackendOriginal = OPTION_ORIGINAL_UNSET;
 
+static struct DjuiButton* sAdvancedGraphicsButton = NULL;
+static void djui_panel_better_graphics_changed(UNUSED struct DjuiBase* caller) {
+    if (sAdvancedGraphicsButton) djui_base_set_enabled(&sAdvancedGraphicsButton->base, configBetterGraphics);
+}
+static void djui_panel_better_graphics_advanced(struct DjuiBase* caller) {
+    struct DjuiThreePanel* panel = djui_panel_menu_create("Better Graphics: Advanced", false);
+    struct DjuiBase* body = djui_three_panel_get_body(panel);
+    djui_checkbox_create(body, "Realtime Shadows and Atmosphere", &configBetterGraphicsShadows, NULL);
+    djui_checkbox_create(body, "Bloom, Sun Rays and Water Effects", &configBetterGraphicsPost, NULL);
+    djui_checkbox_create(body, "Player Wet and Metal Sheen", &configBetterGraphicsSheen, NULL);
+    djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);
+    djui_panel_add(caller, panel, NULL);
+}
+
 static void djui_panel_display_apply(UNUSED struct DjuiBase* caller) {
     configWindow.settings_changed = true;
 }
@@ -115,8 +129,10 @@ void djui_panel_display_create(struct DjuiBase* caller) {
 
         char* filterChoices[3] = { DLANG(DISPLAY, NEAREST), DLANG(DISPLAY, LINEAR), DLANG(DISPLAY, TRIPOINT) };
         djui_selectionbox_create(body, DLANG(DISPLAY, FILTERING), filterChoices, 3, &configFiltering, NULL);
-        djui_checkbox_create(body, "Experimental Better Graphics", &configBetterGraphics, NULL);
+        djui_checkbox_create(body, "Experimental Better Graphics", &configBetterGraphics, djui_panel_better_graphics_changed);
         djui_checkbox_create(body, "Better Graphics Compatibility Mode", &configBetterGraphicsCompatibility, NULL);
+        sAdvancedGraphicsButton = djui_button_create(body, "Better Graphics Advanced Settings", DJUI_BUTTON_STYLE_NORMAL, djui_panel_better_graphics_advanced);
+        djui_base_set_enabled(&sAdvancedGraphicsButton->base, configBetterGraphics);
 
         int maxMsaa = gWindowApi->get_max_msaa();
         if (maxMsaa >= 2) {

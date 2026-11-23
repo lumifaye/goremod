@@ -1,6 +1,8 @@
 #ifndef SAVE_FILE_H
 #define SAVE_FILE_H
 
+#include <stdbool.h>
+
 #include <PR/ultratypes.h>
 
 #include "types.h"
@@ -145,6 +147,7 @@ Saves the current state of the game into a specified save file. Includes data ve
 Useful for maintaining game progress during play or when saving manually
 |descriptionEnd| */
 void save_file_do_save(s32 fileIndex, s8 forceSave);
+bool save_file_complete_vanilla(s32 fileIndex);
 
 /* |description|
 Erases all data in a specified save file, including backup slots. Marks the save file as modified and performs a save to apply the changes.

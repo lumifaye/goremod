@@ -173,6 +173,30 @@ void loading_screen_reset(void) {
     configWindow.settings_changed = true;
 }
 
+// A deliberately scrappy status card shown after graphics is available, before
+// ROM validation and the regular threaded mod loader. Keep it single-threaded.
+void render_early_loading_screen(const char* stage) {
+    if (sLoading) return;
+    init_loading_screen();
+    if (sLoading->splashImage) djui_base_set_visible(&sLoading->splashImage->base, false);
+    if (!sLoading->splashText) {
+        sLoading->splashText = djui_text_create(&sLoading->base, "GOREMOD IS DOING STUFF!!!");
+        djui_base_set_size_type(&sLoading->splashText->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
+        djui_base_set_size(&sLoading->splashText->base, 1.0f, 80);
+        djui_text_set_alignment(sLoading->splashText, DJUI_HALIGN_CENTER, DJUI_VALIGN_CENTER);
+    } else djui_text_set_text(sLoading->splashText, "GOREMOD IS DOING STUFF!!!");
+    djui_base_set_color(&sLoading->splashText->base, 255, 80, 200, 255);
+    loading_screen_set_segment_text(stage);
+    gCurrLoadingSegment.percentage = 0;
+    // The render callback normally positions the splash only for the theme;
+    // position this text ourselves for the early card.
+    djui_base_set_location_type(&sLoading->splashText->base, DJUI_SVT_RELATIVE, DJUI_SVT_ABSOLUTE);
+    djui_base_set_location(&sLoading->splashText->base, 0, 30);
+    gWindowApi->main_loop(loading_screen_produce_one_frame);
+    djui_base_destroy(&sLoading->base);
+    sLoading = NULL;
+}
+
 void render_loading_screen(void) {
     if (!sLoading) { init_loading_screen(); }
 

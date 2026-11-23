@@ -86,6 +86,9 @@ enum GraphicsBackend configGraphicsBackend        = GAPI_GL;
 unsigned int configFiltering                      = 2; // 0 = Nearest, 1 = Bilinear, 2 = Trilinear
 bool         configBetterGraphics                 = false; // experimental; local only
 bool         configBetterGraphicsCompatibility    = false; // lighter path; local only
+bool         configBetterGraphicsShadows          = true;
+bool         configBetterGraphicsPost             = true;
+bool         configBetterGraphicsSheen            = true;
 bool         configShowFPS                        = false;
 bool         configVrAutoStart                    = false;
 unsigned int configVrCameraMode                   = VR_CAMERA_MODE_FIRST_PERSON;
@@ -501,6 +504,9 @@ static const struct ConfigOption options[] = {
     {.name = "texture_filtering",              .type = CONFIG_TYPE_UINT, .uintValue = &configFiltering},
     {.name = "better_graphics",                 .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphics},
     {.name = "better_graphics_compatibility",   .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsCompatibility},
+    {.name = "better_graphics_shadows", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsShadows},
+    {.name = "better_graphics_post", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsPost},
+    {.name = "better_graphics_sheen", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsSheen},
     {.name = "show_fps",                       .type = CONFIG_TYPE_BOOL, .boolValue = &configShowFPS},
     {.name = "vr_auto_start",                  .type = CONFIG_TYPE_BOOL, .boolValue = &configVrAutoStart},
     {.name = "vr_camera_mode",                 .type = CONFIG_TYPE_UINT, .uintValue = &configVrCameraMode},

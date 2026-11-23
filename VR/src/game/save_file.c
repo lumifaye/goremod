@@ -446,6 +446,29 @@ void save_file_do_save(s32 fileIndex, s8 forceSave) {
     save_main_menu_data();
 }
 
+// Menu-only operation: do not write a guest's synchronized session save.
+// Add vanilla completion bits without destroying unrelated or ROM-hack data.
+bool save_file_complete_vanilla(s32 fileIndex) {
+    if (INVALID_FILE_INDEX(fileIndex) || gNetworkType != NT_NONE) return false;
+    struct SaveFile* file = &gSaveBuffer.files[fileIndex][0];
+    for (int i = 0; i < COURSE_STAGES_COUNT; ++i) {
+        file->courseStars[i] |= 0xff; // all seven stars and the cannon
+        if (file->courseCoinScores[i] < 100) file->courseCoinScores[i] = 100;
+    }
+    for (int course = COURSE_BITDW; course <= COURSE_SA; ++course)
+        file->courseStars[course - 1] |= course == COURSE_PSS ? 0x03 : 0x01;
+    file->flags |= SAVE_FLAG_FILE_EXISTS | SAVE_FLAG_HAVE_WING_CAP | SAVE_FLAG_HAVE_METAL_CAP |
+                   SAVE_FLAG_HAVE_VANISH_CAP | SAVE_FLAG_UNLOCKED_BASEMENT_DOOR |
+                   SAVE_FLAG_UNLOCKED_UPSTAIRS_DOOR | SAVE_FLAG_DDD_MOVED_BACK |
+                   SAVE_FLAG_MOAT_DRAINED | SAVE_FLAG_UNLOCKED_PSS_DOOR | SAVE_FLAG_UNLOCKED_WF_DOOR |
+                   SAVE_FLAG_UNLOCKED_CCM_DOOR | SAVE_FLAG_UNLOCKED_JRB_DOOR |
+                   SAVE_FLAG_UNLOCKED_BITDW_DOOR | SAVE_FLAG_UNLOCKED_BITFS_DOOR |
+                   SAVE_FLAG_UNLOCKED_50_STAR_DOOR | STAR_FLAG_TO_SAVE_FLAG(0x1f);
+    gSaveFileModified = TRUE;
+    save_file_do_save(fileIndex, TRUE);
+    return true;
+}
+
 void save_file_erase(s32 fileIndex) {
     if (INVALID_FILE_INDEX(fileIndex)) { return; }
 

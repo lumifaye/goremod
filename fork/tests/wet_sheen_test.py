@@ -11,7 +11,7 @@ for platform in ('PC', 'Android', 'VR'):
     assert 'gMarioStates[player].marioObj == currList->owner' in renderer
     assert 'if (playerSheen) gSPPlayerSheen(gDisplayListHead++, true);' in renderer
     assert 'if (playerSheen) gSPPlayerSheen(gDisplayListHead++, false);' in renderer
-    assert 'configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix' in gfx
+    assert 'configBetterGraphics && configBetterGraphicsSheen && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix' in gfx
     assert 'case G_PLAYER_SHEEN_EXT:' in gfx and 'sPlayerSheen = false;' in gfx
     program = header + r'''
 #include <assert.h>

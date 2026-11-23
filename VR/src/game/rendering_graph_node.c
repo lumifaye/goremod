@@ -7589,7 +7589,7 @@ static void geo_process_shadow(struct GraphNodeShadow *node) {
             bhvChainChompChainPart
         );
     const bool skipShadow =
-        (configBetterGraphics && !configBetterGraphicsCompatibility) ||
+        (configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility) ||
         (configVrUltraPerformanceMode &&
          gCurGraphNodeProcessingObject != gMarioStates[0].marioObj) ||
         distantChainLinkShadow;

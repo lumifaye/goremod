@@ -23,6 +23,7 @@ extern struct ThreadHandle gLoadingThread;
 void loading_screen_set_segment_text(const char* text);
 void loading_screen_reset_progress_bar(void);
 void render_loading_screen(void);
+void render_early_loading_screen(const char* stage);
 void loading_screen_reset(void);
 void render_rom_setup_screen(void);
 

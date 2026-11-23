@@ -10,7 +10,7 @@ for platform in ('PC','Android','VR'):
     assert 'gfx_shadow_stable_center(gLakituState.focus,sShadowCaptureCenter)' in source
     assert 'shadowFade=smoothstep(0.001,0.035,shadowEdge)*smoothstep(0.0,0.025' in shader
     assert 'mix(0.75,1.0,visibility/9.0),shadowFade' in shader
-    assert 'configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix' in source
+    assert 'configBetterGraphics && configBetterGraphicsSheen && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix' in source
     assert '(rsp.geometry_mode & G_TEXTURE_GEN)) {' in source and 'float glint = gfx_wet_sheen(metalPos,metalNormal,gLakituState.pos)' in source
     code='''#include <assert.h>\n#include <math.h>\n#include "'''+header.name+'''"\nint main(void) {
     float p[3]={0,0,0}, small[3]={0.1f,0.1f,0.1f}, moved[3]={12,0,0};

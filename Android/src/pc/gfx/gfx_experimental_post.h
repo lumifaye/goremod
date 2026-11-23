@@ -16,13 +16,18 @@ static bool experimental_post_init(void) {
     if (sExperimentalPost.attempted) return sExperimentalPost.program && sExperimentalPost.texture && sExperimentalPost.buffer;
     sExperimentalPost.attempted=true;
 #if defined(USE_GLES) || defined(__ANDROID__)
-    const char *vs = "#version 100\nattribute vec2 position; varying vec2 uv; void main(){uv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}";
-    const char *fs = "#version 100\nprecision mediump float;\n"
+    const char *vs = "#version 100\nattribute vec2 position; varying highp vec2 uv; void main(){uv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}";
+    const char *fs = "#version 100\nprecision highp float;\n"
 #else
     const char *vs = "#version 120\nattribute vec2 position; varying vec2 uv; void main(){uv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}";
     const char *fs = "#version 120\n"
 #endif
-        "uniform sampler2D image; uniform vec2 pixel; uniform float phase; uniform float underwater; uniform vec2 sun; uniform float sunVisible; varying vec2 uv;"
+        "uniform sampler2D image; uniform vec2 pixel; uniform float phase; uniform float underwater; uniform vec2 sun; uniform float sunVisible; "
+#if defined(USE_GLES) || defined(__ANDROID__)
+        "varying highp vec2 uv;"
+#else
+        "varying vec2 uv;"
+#endif
         "vec3 bright(vec2 p){vec3 c=texture2D(image,clamp(p,0.0,1.0)).rgb; return max(c-vec3(0.72),0.0);}"
         "void main(){vec2 p=uv;"
         "p += underwater*vec2(sin(uv.y*34.0+phase)*0.0025,sin(uv.x*29.0+phase*0.8)*0.0020);"

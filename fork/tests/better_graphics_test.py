@@ -11,7 +11,7 @@ for platform in ('PC', 'Android'):
     assert '"Experimental Better Graphics", &configBetterGraphics' in (base/'djui/djui_panel_display.c').read_text()
     source = (base/'gfx/gfx_pc.c').read_text()
     start = source.index('            if (configBetterGraphics && !gFullbright) {')
-    end = source.index('\n\n            if (configBetterGraphics && sPlayerSheen', start)
+    end = source.index('\n\n            if (configBetterGraphics && configBetterGraphicsSheen && sPlayerSheen', start)
     block = source[start:end]
     program = '''#include <assert.h>
 #include <stdbool.h>

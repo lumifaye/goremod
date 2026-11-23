@@ -940,7 +940,7 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 }
             }
 
-            if (configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
+            if (configBetterGraphics && configBetterGraphicsSheen && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
                 !(rsp.geometry_mode & G_TEXTURE_GEN)) {
                 Vec3f wetPos = {v->ob[0], v->ob[1], v->ob[2]};
                 Vec3f wetNormal = {nx / 127.0f, ny / 127.0f, nz / 127.0f};
@@ -952,7 +952,7 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
             // The player's environment-mapped metal retains its authored
             // reflection textures. Add a restrained view-dependent glint to
             // its light response without repainting ordinary materials.
-            if (configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
+            if (configBetterGraphics && configBetterGraphicsSheen && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
                 (rsp.geometry_mode & G_TEXTURE_GEN)) {
                 Vec3f metalPos = {v->ob[0], v->ob[1], v->ob[2]};
                 Vec3f metalNormal = {nx / 127.0f, ny / 127.0f, nz / 127.0f};
@@ -1138,7 +1138,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     struct GfxVertex *v2 = &rsp.loaded_vertices[vtx2_idx];
     struct GfxVertex *v3 = &rsp.loaded_vertices[vtx3_idx];
     struct GfxVertex *v_arr[3] = {v1, v2, v3};
-    if (sShadowVertices && configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright &&
+    if (sShadowVertices && configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility && !gFullbright &&
         (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) &&
         v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
@@ -1236,7 +1236,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->use_fog        = (rdp.other_mode_l >> 30)                       == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
-    const bool want_shadow = configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
+    const bool want_shadow = configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
         gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) && v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
     cm->shadow_receiver = false;
@@ -2207,7 +2207,7 @@ void gfx_run(Gfx *commands) {
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
     if (gfx_rapi == &gfx_opengl_api) {
-        if (configBetterGraphics && !configBetterGraphicsCompatibility) {
+        if (configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility) {
             if (!sShadowVertices) sShadowVertices=malloc((size_t)GFX_SHADOW_MAX_VERTICES*3*sizeof(float));
             gfx_opengl_shadow_submit(sShadowVertices,sShadowVertexCount,sShadowCaptureCenter);
             if (rendering_state.shader_program) {
@@ -2229,7 +2229,7 @@ void gfx_run(Gfx *commands) {
 }
 
 bool gfx_realtime_shadow_available(void) {
-    return configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api && gfx_opengl_shadow_ready();
+    return configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api && gfx_opengl_shadow_ready();
 }
 
 void gfx_end_frame_render(void) {
@@ -2238,7 +2238,7 @@ void gfx_end_frame_render(void) {
     // Post effects are currently restricted to flat OpenGL: warping a VR
     // projection can cause discomfort, and multisampled eye targets cannot be
     // copied portably on GLES2. Never run on a dropped frame.
-    if (!dropped_frame && configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api && true) {
+    if (!dropped_frame && configBetterGraphics && configBetterGraphicsPost && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api && true) {
         const float *eye = gLakituState.pos;
         float water = find_water_level(eye[0], eye[2]);
         float sun[2] = {0.5f, 0.5f};

@@ -68,6 +68,25 @@ local function iwbtgtoggle()
     return true
 end
 
+-- Separate from the engine's vanilla save: trophies live in this mod's own
+-- per-slot storage, and changing them in a lobby is visible to all players.
+local trophyCompletionSlot = nil
+local function complete_trophies()
+    if not network_is_server() then return end
+    local slot = get_current_save_file_num()
+    if trophyCompletionSlot ~= slot then
+        trophyCompletionSlot = slot
+        djui_chat_message_create("This unlocks ALL Gore trophies for this host save and lobby. Press the button again to confirm.")
+        return
+    end
+    trophyCompletionSlot = nil
+    for id, trophy in pairs(trophyinfo) do
+        mod_storage_save("file"..slot..trophy.name, "1")
+        gGlobalSyncTable.trophystatus[id] = true
+    end
+    djui_chat_message_create("All Gore trophies unlocked for this save. Re-enter the trophy room to refresh it.")
+end
+
 local function cleartrophies()
     if network_is_server() then
         for id, trophy in pairs(trophyinfo) do
@@ -89,6 +108,7 @@ end
 hook_mod_menu_checkbox("Enable vomiting", false, puketoggle)
 if network_is_server() then
     hook_mod_menu_button("Reset All Trophies [HOST]", cleartrophies)
+    hook_mod_menu_button("Unlock All Trophies [HOST; press twice]", complete_trophies)
 end
 
 gore_build_options_menu()

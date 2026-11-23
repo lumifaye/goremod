@@ -540,6 +540,8 @@ int main(int argc, char *argv[]) {
         gWindowApi->set_scroll_callback(mouse_on_scroll);
     }
 
+    if (!gCLIOpts.hideLoadingScreen && !gCLIOpts.headless) render_early_loading_screen("Checking your ROM (please hold lol)");
+
     // render the rom setup screen
     if (!main_rom_handler()) {
         if (!gCLIOpts.hideLoadingScreen) {
@@ -549,6 +551,8 @@ int main(int argc, char *argv[]) {
             return 0;
         }
     }
+
+    if (!gCLIOpts.hideLoadingScreen && !gCLIOpts.headless) render_early_loading_screen("Getting the mod loader ready...");
 
     // start the thread for setting up the game
     bool threadSuccess = false;

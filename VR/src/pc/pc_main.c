@@ -764,6 +764,8 @@ int main(int argc, char *argv[]) {
 
     vr_on_graphics_ready();
 
+    if (!gCLIOpts.hideLoadingScreen && !gCLIOpts.headless) render_early_loading_screen("Checking your ROM (please hold lol)");
+
     // render the rom setup screen
     if (!main_rom_handler()) {
         if (!gCLIOpts.hideLoadingScreen) {
@@ -773,6 +775,8 @@ int main(int argc, char *argv[]) {
             return 0;
         }
     }
+
+    if (!gCLIOpts.hideLoadingScreen && !gCLIOpts.headless) render_early_loading_screen("Getting the mod loader ready...");
 
     // start the thread for setting up the game
     bool threadSuccess = false;

@@ -27,6 +27,8 @@ jobs:
           python3 fork/tests/wet_sheen_test.py
           python3 fork/tests/experimental_post_test.py
           python3 fork/tests/post_failure_test.py
+          python3 fork/tests/android_texture_precision_test.py
+          python3 fork/tests/save_complete_test.py
           python3 fork/tests/graphics_compatibility_test.py
           python3 fork/tests/environment_graphics_test.py
           python3 fork/tests/directional_shadows_test.py
