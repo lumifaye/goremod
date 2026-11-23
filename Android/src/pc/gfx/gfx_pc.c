@@ -37,6 +37,8 @@
 #include "pc/fs/fs.h"
 
 #include "pc/gfx/gfx_cc.h"
+#include "pc/gfx/gfx_normal_maps.h"
+#include "data/dynos.c.h"
 #include "gfx_wet_sheen.h"
 #include "gfx_experimental_sun.h"
 #include "gfx_shadow_range.h"
@@ -586,8 +588,12 @@ static void import_texture_ci8(int tile) {
 
 static void import_texture(int tile) {
     tile = tile % MAX_TILES;
+    gfx_normal_maps_clear_pending_texture_name();
     extern s32 dynos_tex_import(void **output, void *ptr, s32 tile, void *grapi, void **hashmap, void *pool, s32 *poolpos, s32 poolsize);
     if (dynos_tex_import((void **) &rendering_state.textures[tile], (void *) rdp.loaded_texture[tile].addr, tile, gfx_rapi, (void **) gfx_texture_cache.hashmap, (void *) gfx_texture_cache.pool, (int *) &gfx_texture_cache.pool_pos, MAX_CACHED_TEXTURES)) { return; }
+    struct TextureInfo texture_info = { 0 };
+    if (rdp.loaded_texture[tile].addr && dynos_texture_get_from_data((const Texture *) rdp.loaded_texture[tile].addr, &texture_info))
+        gfx_normal_maps_set_pending_texture_name(texture_info.name);
     uint8_t fmt = rdp.texture_tile[tile].fmt;
     uint8_t siz = rdp.texture_tile[tile].siz;
 
@@ -602,6 +608,7 @@ static void import_texture(int tile) {
     }
 
     if (gfx_texture_cache_lookup(tile, &rendering_state.textures[tile], rdp.loaded_texture[tile].addr, fmt, siz)) {
+        gfx_normal_maps_clear_pending_texture_name();
         return;
     }
 
@@ -1235,6 +1242,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->use_fog        = (rdp.other_mode_l >> 30)                       == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
+    cm->normal_mapping = configBetterGraphics && configBetterGraphicsNormalMaps && gfx_rapi == &gfx_opengl_api;
     const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
         (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
         v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;

@@ -16,7 +16,7 @@ for platform in ('PC','Android'):
     features=cc[cc.index('void gfx_cc_get_features('):cc.index('void gfx_cc_print(')]
     helpers=src[src.index('static void append_str('):src.index('static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(')]
     gen=src[src.index('    struct CCFeatures ccf = { 0 };',src.index('static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(')):src.index("    vs_buf[vs_len] = '\\0';")]
-    gen=gen.replace('char vs_buf[8192];','char vs_buf[65536];').replace('char fs_buf[8192];','char fs_buf[65536];')
+    gen=gen.replace('char vs_buf[8192];','char vs_buf[65536];').replace('char fs_buf[16384];','char fs_buf[65536];').replace('char fs_buf[8192];','char fs_buf[65536];')
     program=r'''
 #include <assert.h>
 #include <stdint.h>
@@ -32,7 +32,7 @@ HELPERS
 static void test(struct ColorCombiner *cc) {
 GEN
     vs_buf[vs_len]=0; fs_buf[fs_len]=0;
-    assert(vs_len<8192 && fs_len<8192);
+    assert(vs_len<8192 && fs_len<16384);
     assert((strstr(vs_buf,"aShadowWorld;")!=NULL)==(bool)cc->cm.shadow_receiver);
     assert((strstr(fs_buf,"uniform sampler2D uShadowMap;")!=NULL)==(bool)cc->cm.shadow_receiver);
 #ifdef __ANDROID_ENHANCED_TEST
@@ -52,7 +52,7 @@ int main(int argc,char **argv) {
         for mode in ([],['-DUSE_GLES']):
             exe=str(Path(tmp)/'gen')
             subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-I',str(base),*mode,*(['-D__ANDROID_ENHANCED_TEST'] if platform == 'Android' else []),'-x','c','-','-o',exe],input=program.encode(),check=True)
-            for flags in (0,1,2,16,32,64,128,129,255,256,384,511):
+            for flags in (0,1,2,16,32,64,128,129,255,256,384,511,512,640,768,1023):
                 subprocess.run([exe,str(flags)],cwd=tmp,check=True)
                 if len(sys.argv)>1:
 

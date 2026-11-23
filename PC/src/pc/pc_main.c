@@ -19,6 +19,7 @@
 #include "rom_assets.h"
 #include "rom_checker.h"
 #include "pc_main.h"
+#include "pc/gfx/gfx_normal_maps.h"
 #include "loading.h"
 #include "cliopts.h"
 #include "configfile.h"
@@ -482,6 +483,7 @@ void* main_game_init(UNUSED void* dummy) {
 
     LOADING_SCREEN_MUTEX(loading_screen_set_segment_text("Loading ROM Assets"));
     rom_assets_load();
+    gfx_normal_maps_on_rom_loaded();
     smlua_text_utils_init();
 
     mods_init();

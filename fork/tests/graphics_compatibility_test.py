@@ -20,7 +20,7 @@ for platform in ('PC','Android','VR'):
     # Compatibility does not erase the user's graphics setting or block its light path.
     assert 'configBetterGraphics = false' not in gfx
     if platform != 'VR':
-        assert ('if (configBetterGraphics && !gFullbright)' in gfx if platform == 'PC' else 'const bool want_enhanced_lighting = configBetterGraphics && !gFullbright' in gfx)
+        assert 'const bool want_enhanced_lighting = configBetterGraphics && !gFullbright' in gfx
         assert 'return configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility' in gfx
     else:
         geo=(root/platform/'src/game/rendering_graph_node.c').read_text()

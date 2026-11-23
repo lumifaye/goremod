@@ -1596,6 +1596,7 @@ else
 	@cp -r platform/android $(BUILD_DIR)/platform/ >/dev/null 2>&1 && \
 	mkdir -p $(BUILD_DIR)/platform/android/app/assets/ >/dev/null 2>&1 && \
 	cp -r mods lang palettes dynos $(BUILD_DIR)/platform/android/app/assets/ >/dev/null 2>&1 && \
+	cp assets/normal_maps.bin $(BUILD_DIR)/platform/android/app/assets/ >/dev/null 2>&1 && \
   mkdir -p $(BUILD_DIR)/platform/android/app/lib/$(ANDROID_ARCH) >/dev/null 2>&1 && \
 	cp $(PREFIX)/lib/libc++_shared.so $(BUILD_DIR)/platform/android/app/lib/$(ANDROID_ARCH)/ >/dev/null 2>&1 && \
   cp lib/sdl2/android/$(ANDROID_ARCH)/libSDL2.so $(BUILD_DIR)/platform/android/app/lib/$(ANDROID_ARCH)/ >/dev/null 2>&1 && \

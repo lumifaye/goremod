@@ -89,6 +89,7 @@ bool         configBetterGraphicsCompatibility    = false; // lighter path; loca
 bool         configBetterGraphicsShadows          = true;
 bool         configBetterGraphicsPost             = true;
 bool         configBetterGraphicsSheen            = true;
+bool         configBetterGraphicsNormalMaps       = true;
 bool         configShowFPS                        = false;
 bool         configVrAutoStart                    = false;
 unsigned int configVrCameraMode                   = VR_CAMERA_MODE_FIRST_PERSON;
@@ -507,6 +508,7 @@ static const struct ConfigOption options[] = {
     {.name = "better_graphics_shadows", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsShadows},
     {.name = "better_graphics_post", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsPost},
     {.name = "better_graphics_sheen", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsSheen},
+    {.name = "better_graphics_normal_maps", .type = CONFIG_TYPE_BOOL, .boolValue = &configBetterGraphicsNormalMaps},
     {.name = "show_fps",                       .type = CONFIG_TYPE_BOOL, .boolValue = &configShowFPS},
     {.name = "vr_auto_start",                  .type = CONFIG_TYPE_BOOL, .boolValue = &configVrAutoStart},
     {.name = "vr_camera_mode",                 .type = CONFIG_TYPE_UINT, .uintValue = &configVrCameraMode},

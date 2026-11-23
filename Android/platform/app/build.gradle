@@ -52,6 +52,10 @@ android {
                 dest.deleteDir()
             }
             dest.mkdirs()
+            copy {
+                from new File(rootProject.projectDir, "assets/normal_maps.bin")
+                into dest
+            }
             assetNames.each { folderName ->
                 def src = new File(rootProject.projectDir, folderName)
                 if (src.exists()) {

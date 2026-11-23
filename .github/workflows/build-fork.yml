@@ -149,6 +149,7 @@ jobs:
           mkdir -p out/Realism64
           cd game/build/us_pc
           cp -r dynos lang mods palettes libdiscord_game_sdk.so sm64coopdx ../../../out/Realism64/
+          cp ../../assets/normal_maps.bin ../../../out/Realism64/
           cd ../../../out
           cp ../fork/README-linux.txt Realism64/README.txt
           cp ../fork/icon/icon.png Realism64/icon.png
@@ -461,6 +462,7 @@ jobs:
           ls -l game/platform/app/build/outputs/apk/release/
           cp game/platform/app/build/outputs/apk/release/app-release.apk out/Realism64-Android.apk
           unzip -l out/Realism64-Android.apk > "$RUNNER_TEMP/apk.txt"
+          grep -q -F "assets/normal_maps.bin" "$RUNNER_TEMP/apk.txt"
           while IFS= read -r mod; do grep -q -F "assets/mods/$mod/built-in.txt" "$RUNNER_TEMP/apk.txt"; done < game/fork-built-in-mods.txt
           if grep -q -F "assets/mods/Gore-Hardmode/" "$RUNNER_TEMP/apk.txt"; then exit 1; fi
           rm -rf "$RUNNER_TEMP/apk" && mkdir -p "$RUNNER_TEMP/apk"

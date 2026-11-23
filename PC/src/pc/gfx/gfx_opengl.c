@@ -30,6 +30,7 @@
 #include "../platform.h"
 #include "../configfile.h"
 #include "gfx_cc.h"
+#include "gfx_normal_maps.h"
 #include "gfx_rendering_api.h"
 #include "gfx_experimental_post.h"
 #include "gfx_shadow_map.h"
@@ -52,10 +53,14 @@ struct ShaderProgram {
     bool world_geometry;
     GLint shadow_sampler, shadow_center;
     GLint environment_eye_location, environment_state_location;
+    GLint normal_sampler[2], normal_enabled[2], normal_strength, normal_gloss, normal_better;
 };
 
 struct GLTexture {
     GLuint gltex;
+    GLuint normal_gltex;
+    bool has_normal, normal_clamp_edges;
+    GLenum wrap_s, wrap_t;
     GLfloat size[2];
     bool filter;
 };
@@ -110,10 +115,54 @@ static inline void gfx_opengl_set_shader_uniforms(struct ShaderProgram *prg) {
     glUniform1i(prg->uniform_locations[8], configFiltering);
 }
 
+static bool gfx_opengl_normal_map_has_discontinuous_edges(
+    const uint8_t *rgba,
+    int width,
+    int height
+) {
+    if (rgba == NULL || width < 2 || height < 2) return false;
+
+    double error = 0.0;
+    size_t samples = 0;
+    for (int x = 0; x < width; x++) {
+        const size_t top = (size_t)x * 4;
+        const size_t bottom = ((size_t)(height - 1) * (size_t)width + (size_t)x) * 4;
+        for (int channel = 0; channel < 3; channel++) {
+            const double delta = (double)rgba[top + channel] - (double)rgba[bottom + channel];
+            error += delta * delta;
+            samples++;
+        }
+    }
+    for (int y = 0; y < height; y++) {
+        const size_t left = ((size_t)y * (size_t)width) * 4;
+        const size_t right = ((size_t)y * (size_t)width + (size_t)(width - 1)) * 4;
+        for (int channel = 0; channel < 3; channel++) {
+            const double delta = (double)rgba[left + channel] - (double)rgba[right + channel];
+            error += delta * delta;
+            samples++;
+        }
+    }
+    if (samples == 0) return false;
+    // A repeated normal texture whose opposite borders differ by more than
+    // roughly 32 intensity levels per channel will produce a visible seam
+    // when bilinear filtering crosses the wrap boundary. Clamp only those
+    // authored discontinuities; tileable maps retain their requested wrap.
+    return (error / (double)samples) > (32.0 * 32.0);
+}
+
 static inline void gfx_opengl_set_texture_uniforms(struct ShaderProgram *prg, const int tile) {
-    if (prg->used_textures[tile] && opengl_tex[tile]) {
+    if (prg && prg->used_textures[tile] && opengl_tex[tile]) {
         glUniform2f(prg->uniform_locations[tile*2 + 0], opengl_tex[tile]->size[0], opengl_tex[tile]->size[1]);
         glUniform1i(prg->uniform_locations[tile*2 + 1], opengl_tex[tile]->filter);
+        if (prg->normal_sampler[tile] >= 0) {
+            bool enabled = configBetterGraphics && opengl_tex[tile]->has_normal;
+            GLint active; glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+            glActiveTexture(GL_TEXTURE3 + tile);
+            glBindTexture(GL_TEXTURE_2D, enabled ? opengl_tex[tile]->normal_gltex : 0);
+            glUniform1i(prg->normal_sampler[tile], 3 + tile);
+            glUniform1i(prg->normal_enabled[tile], enabled);
+            glActiveTexture(active);
+        }
     }
 }
 
@@ -133,6 +182,9 @@ static void gfx_opengl_load_shader(struct ShaderProgram *new_prg) {
     glUseProgram(new_prg->opengl_program_id);
     gfx_opengl_vertex_array_set_attribs(new_prg);
     gfx_opengl_set_shader_uniforms(new_prg);
+    if (new_prg->normal_strength >= 0) glUniform1f(new_prg->normal_strength, 0.75f);
+    if (new_prg->normal_gloss >= 0) glUniform1f(new_prg->normal_gloss, 0.425f);
+    if (new_prg->normal_better >= 0) glUniform1i(new_prg->normal_better, 1);
     gfx_opengl_set_texture_uniforms(new_prg, 0);
     gfx_opengl_set_texture_uniforms(new_prg, 1);
     if (new_prg->shadow_sampler >= 0 && sShadowMap.valid) {
@@ -154,6 +206,76 @@ static void append_line(char *buf, size_t *len, const char *str) {
     while (*str != '\0') buf[(*len)++] = *str++;
     buf[(*len)++] = '\n';
 }
+
+#define NORMAL_SAMPLE "texture2D"
+static void append_normal_map_shader(char *fs_buf, size_t *fs_len,
+                                     int tile, bool first) {
+    char line[512];
+    snprintf(line, sizeof(line), "%s (uNormalMap%d) {",
+             first ? "if" : "else if", tile);
+    append_line(fs_buf, fs_len, line);
+    // Normal vectors use a dedicated linear/trilinear sampler. Reusing the
+    // base texture's point/three-point reconstruction creates high-frequency
+    // static on stretched UVs and makes the relief unstable at close range.
+    snprintf(line, sizeof(line),
+             "vec3 mapNormal = " NORMAL_SAMPLE "(uNormalTex%d, vTexCoord%d).xyz * 2.0 - 1.0;",
+             tile, tile);
+    append_line(fs_buf, fs_len, line);
+    append_line(fs_buf, fs_len, "float mapNormalLength2 = dot(mapNormal, mapNormal);");
+    append_line(fs_buf, fs_len, "if (mapNormalLength2 > 0.000001) mapNormal *= inversesqrt(mapNormalLength2); else mapNormal = vec3(0.0, 0.0, 1.0);");
+    // Keep the authored tangent-space map in a stable UV basis. Reconstructing
+    // tangents from clip-space derivatives makes the response depend on
+    // camera distance and interpolation, creating bands on stretched or
+    // mirrored N64 polygons.
+    append_line(fs_buf, fs_len, "vec3 normalMapLight = normalize(vec3(-0.45, 0.65, 0.85));");
+    append_line(fs_buf, fs_len, "float baseLight = normalMapLight.z;");
+    append_line(fs_buf, fs_len, "float mappedLight = max(dot(mapNormal, normalMapLight), 0.0);");
+    // Preserve the existing combiner brightness. Relief and gloss are
+    // intentionally independent: strength controls the diffuse normal
+    // response, while gloss controls only a restrained specular sheen. The
+    // previous implementation multiplied relief by gloss, which made the
+    // normal-map slider appear dead at low gloss and made its highlights rise
+    // together with relief instead of behaving like a material control.
+    append_line(fs_buf, fs_len, "float normalMapDetail = mappedLight - baseLight;");
+    append_line(fs_buf, fs_len, "float normalMapStrength = uNormalMapStrength;");
+    append_line(fs_buf, fs_len, "float normalMapGloss = clamp(uNormalMapGloss, 0.0, 1.0);");
+    // Keep strength as a restrained diffuse relief term. A large multiplier
+    // here was the source of the wet/over-bright look users saw when raising
+    // strength; gloss must remain an independent material control.
+    /* The uniform is already normalized for the UI range. The previous attenuation and clamp made normal-map strength nearly invisible. */
+    // Restore the bounded relief response from the last tested strong-strength pass.
+    // It preserves visible contrast at 230 while preventing extreme map texels
+    // from turning into a dark or over-bright wash.
+    append_line(fs_buf, fs_len, "float normalMapRelief = clamp(1.0 + normalMapDetail * normalMapStrength * 0.45, 0.85, 1.15);");
+    // Gloss controls highlight sharpness with a small bounded intensity.
+    // This keeps it independent from relief strength and avoids white additive
+    // bloom on stone, sand, and other bright N64 textures.
+    append_line(fs_buf, fs_len, "float normalMapGlossPower = mix(48.0, 8.0, normalMapGloss);");
+    append_line(fs_buf, fs_len, "float normalMapSpecular = min(pow(mappedLight, normalMapGlossPower) * normalMapGloss * 0.10, 0.12);");
+
+    // Experimental material response: three soft, colored lobes evaluated per
+    // pixel from the authored tangent-space normal. Subtract each flat-normal
+    // response so neutral maps do not repaint the original combiner. This is
+    // texture-space material lighting, not world-space shadow casting.
+    append_line(fs_buf, fs_len, "if (uBetterGraphics) {");
+    append_line(fs_buf, fs_len, "vec3 key = normalize(vec3(-0.45, 0.65, 0.85));");
+    append_line(fs_buf, fs_len, "vec3 fill = normalize(vec3(0.70, 0.20, 0.75));");
+    append_line(fs_buf, fs_len, "vec3 bounce = normalize(vec3(0.10, -0.80, 0.55));");
+    append_line(fs_buf, fs_len, "float k = max(dot(mapNormal, key), 0.0) - key.z;");
+    append_line(fs_buf, fs_len, "float f = max(dot(mapNormal, fill), 0.0) - fill.z;");
+    append_line(fs_buf, fs_len, "float b = max(dot(mapNormal, bounce), 0.0) - bounce.z;");
+    append_line(fs_buf, fs_len, "vec3 detail = vec3(0.48, 0.39, 0.29) * k + vec3(0.13, 0.20, 0.31) * f + vec3(0.12, 0.09, 0.06) * b;");
+    append_line(fs_buf, fs_len, "vec3 materialLight = clamp(vec3(1.0) + detail * normalMapStrength, vec3(0.68), vec3(1.30));");
+    append_line(fs_buf, fs_len, "float sheen = max(pow(max(dot(mapNormal, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0), 24.0) - pow(normalize(key + vec3(0.0, 0.0, 1.0)).z, 24.0), 0.0);");
+    append_line(fs_buf, fs_len, "texel.rgb = texel.rgb * materialLight + vec3(1.0, 0.88, 0.72) * sheen * normalMapGloss * 0.12;");
+    append_line(fs_buf, fs_len, "} else {");
+    append_line(fs_buf, fs_len, "texel.rgb *= normalMapRelief;");
+    append_line(fs_buf, fs_len, "texel.rgb += vec3(normalMapSpecular);");
+    append_line(fs_buf, fs_len, "}");
+    // Close the uNormalMap block.
+    append_line(fs_buf, fs_len, "}");
+}
+
 
 static const char *shader_item_to_str(uint32_t item, bool with_alpha, bool only_alpha, bool inputs_have_alpha, bool hint_single_element) {
     if (!only_alpha) {
@@ -275,6 +397,8 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     bool opt_light_map = cc->cm.light_map;
     bool world_geometry = cc->cm.world_geometry;
     bool shadow_receiver = cc->cm.shadow_receiver;
+    bool enhanced_lighting = cc->cm.enhanced_lighting;
+    bool normal_mapping = cc->cm.normal_mapping && (ccf.used_textures[0] || ccf.used_textures[1]);
 
 #ifdef USE_GLES
     bool opt_dither = false;
@@ -283,7 +407,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
 #endif
 
     char vs_buf[8192];
-    char fs_buf[8192];
+    char fs_buf[16384];
     size_t vs_len = 0;
     size_t fs_len = 0;
     size_t num_floats = 4;
@@ -295,6 +419,15 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(vs_buf, &vs_len, "#version 120");
 #endif
     append_line(vs_buf, &vs_len, "attribute vec4 aVtxPos;");
+    if (enhanced_lighting) {
+        append_line(vs_buf, &vs_len, "attribute  vec3 aWorldNormal;");
+#ifdef USE_GLES
+        append_line(vs_buf, &vs_len, "varying  mediump vec3 vWorldNormal;");
+#else
+        append_line(vs_buf, &vs_len, "varying  vec3 vWorldNormal;");
+#endif
+        num_floats += 3;
+    }
     if (shadow_receiver) {
         append_line(vs_buf, &vs_len, "attribute vec3 aShadowWorld;");
 #ifdef USE_GLES
@@ -327,6 +460,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         num_floats += opt_alpha ? 4 : 3;
     }
     append_line(vs_buf, &vs_len, "void main() {");
+    if (enhanced_lighting) append_line(vs_buf, &vs_len, "vWorldNormal=aWorldNormal;");
     if (shadow_receiver) append_line(vs_buf, &vs_len, "vShadowWorld=aShadowWorld;");
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
@@ -353,6 +487,13 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     append_line(fs_buf, &fs_len, "#version 120");
 #endif
 
+    if (enhanced_lighting) {
+#ifdef USE_GLES
+        append_line(fs_buf, &fs_len, "varying  mediump vec3 vWorldNormal;");
+#else
+        append_line(fs_buf, &fs_len, "varying  vec3 vWorldNormal;");
+#endif
+    }
     if (shadow_receiver) {
 #ifdef USE_GLES
         append_line(fs_buf, &fs_len, "varying highp vec3 vShadowWorld;");
@@ -383,6 +524,13 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
             fs_len += sprintf(fs_buf + fs_len, "uniform vec2 uTex%dSize;\n", t);
             fs_len += sprintf(fs_buf + fs_len, "uniform bool uTex%dFilter;\n", t);
         }
+    }
+
+    if (normal_mapping) {
+        for (int t=0; t<2; ++t) if (ccf.used_textures[t]) {
+            fs_len += sprintf(fs_buf + fs_len, "uniform sampler2D uNormalTex%d; uniform bool uNormalMap%d;\n", t, t);
+        }
+        append_line(fs_buf, &fs_len, "uniform float uNormalMapStrength; uniform float uNormalMapGloss; uniform bool uBetterGraphics;");
     }
 
     // 3 point texture filtering
@@ -514,6 +662,31 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         }
     }
 
+    // Per-fragment world-space directional and hemisphere lighting. The
+    // interpolated model normal is renormalized per pixel; multiplication
+    // retains the authored lighting/colors and keeps true black black.
+    if (enhanced_lighting) {
+        append_line(fs_buf, &fs_len, "float normalLen2 = dot(vWorldNormal, vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if (normalLen2 > 0.000001) {");
+        append_line(fs_buf, &fs_len, "vec3 N = vWorldNormal * inversesqrt(normalLen2);");
+        append_line(fs_buf, &fs_len, "float sky = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);");
+        append_line(fs_buf, &fs_len, "float key = max(dot(N, normalize(vec3(-0.35, 0.80, 0.48))), 0.0);");
+        append_line(fs_buf, &fs_len, "float fill = max(dot(N, normalize(vec3(0.65, 0.30, -0.55))), 0.0);");
+        append_line(fs_buf, &fs_len, "float bounce = max(dot(N, normalize(vec3(0.15, -0.90, 0.25))), 0.0);");
+        append_line(fs_buf, &fs_len, "vec3 lighting = vec3(0.91, 0.90, 0.89) + sky * vec3(0.06, 0.09, 0.15) + key * vec3(0.30, 0.23, 0.16) + fill * vec3(0.08, 0.10, 0.16) + bounce * vec3(0.12, 0.08, 0.04);");
+        append_line(fs_buf, &fs_len, "texel.rgb *= clamp(lighting, vec3(0.85), vec3(1.35));");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
+
+    if (normal_mapping) {
+        bool first_normal_branch = true;
+        for (int t=0; t<2; ++t) if (ccf.used_textures[t]) {
+            append_normal_map_shader(fs_buf, &fs_len, t, first_normal_branch);
+            first_normal_branch = false;
+        }
+    }
+
     if (opt_texture_edge && opt_alpha) {
         append_line(fs_buf, &fs_len, "if (texel.a > 0.3) texel.a = 1.0; else discard;");
     }
@@ -604,6 +777,17 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "}");
     }
 
+    if (shadow_receiver && enhanced_lighting) {
+        // A very small sky-colored Fresnel rim suggests material reflectance.
+        append_line(fs_buf, &fs_len, "vec3 envView=uEnvironmentEye-vShadowWorld;");
+        append_line(fs_buf, &fs_len, "float envViewLen=dot(envView,envView); float envNormalLen=dot(vWorldNormal,vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if(envViewLen>0.000001 && envNormalLen>0.000001){");
+        append_line(fs_buf, &fs_len, "float envFacing=max(dot(envView*inversesqrt(envViewLen),vWorldNormal*inversesqrt(envNormalLen)),0.0);");
+        append_line(fs_buf, &fs_len, "float envRim=pow(1.0-clamp(envFacing,0.0,1.0),4.0);");
+        append_line(fs_buf, &fs_len, "texel.rgb+=texel.rgb*vec3(0.025,0.035,0.05)*envRim;");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
     if (opt_fog) {
         if (opt_alpha) {
             append_line(fs_buf, &fs_len, "texel = vec4(mix(texel.rgb, vFog.rgb, vFog.a), texel.a);");
@@ -679,6 +863,10 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->attrib_sizes[cnt] = 4;
     ++cnt;
 
+    if (enhanced_lighting) {
+        prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aWorldNormal");
+        prg->attrib_sizes[cnt] = 3; ++cnt;
+    }
     if (shadow_receiver) {
         prg->attrib_locations[cnt] = glGetAttribLocation(shader_program, "aShadowWorld");
         prg->attrib_sizes[cnt] = 3; ++cnt;
@@ -757,6 +945,16 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         prg->world_geometry = false;
     }
 
+    for (int t=0; t<2; ++t) {
+        char name[32];
+        snprintf(name, sizeof(name), "uNormalTex%d", t);
+        prg->normal_sampler[t] = normal_mapping ? glGetUniformLocation(shader_program, name) : -1;
+        snprintf(name, sizeof(name), "uNormalMap%d", t);
+        prg->normal_enabled[t] = normal_mapping ? glGetUniformLocation(shader_program, name) : -1;
+    }
+    prg->normal_strength = normal_mapping ? glGetUniformLocation(shader_program, "uNormalMapStrength") : -1;
+    prg->normal_gloss = normal_mapping ? glGetUniformLocation(shader_program, "uNormalMapGloss") : -1;
+    prg->normal_better = normal_mapping ? glGetUniformLocation(shader_program, "uBetterGraphics") : -1;
     prg->uniform_locations[8] = glGetUniformLocation(shader_program, "uFilter");
     prg->shadow_sampler = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowMap") : -1;
     prg->shadow_center = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowCenter") : -1;
@@ -792,6 +990,7 @@ static GLuint gfx_opengl_new_texture(void) {
         opengl_tex[0] = NULL;
         opengl_tex[1] = NULL;
     }
+    memset(&tex_cache[num_textures], 0, sizeof(struct GLTexture));
     glGenTextures(1, &tex_cache[num_textures].gltex);
     return num_textures++;
 }
@@ -808,6 +1007,29 @@ static void gfx_opengl_upload_texture(const uint8_t *rgba32_buf, int width, int 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba32_buf);
     opengl_tex[opengl_curtex]->size[0] = width;
     opengl_tex[opengl_curtex]->size[1] = height;
+    struct GLTexture *texture = opengl_tex[opengl_curtex];
+    uint8_t *normal = NULL; int nw=0, nh=0;
+    if (texture->normal_gltex) { glDeleteTextures(1, &texture->normal_gltex); texture->normal_gltex=0; }
+    texture->has_normal = false;
+    if (gfx_normal_maps_load_pending(&normal, &nw, &nh, width, height)) {
+        GLint active; glGetIntegerv(GL_ACTIVE_TEXTURE, &active);
+        glActiveTexture(GL_TEXTURE3 + opengl_curtex);
+        glGenTextures(1, &texture->normal_gltex);
+        glBindTexture(GL_TEXTURE_2D, texture->normal_gltex);
+        texture->normal_clamp_edges = gfx_opengl_normal_map_has_discontinuous_edges(normal, nw, nh);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture->normal_clamp_edges ? GL_CLAMP_TO_EDGE : (texture->wrap_s ? texture->wrap_s : GL_REPEAT));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture->normal_clamp_edges ? GL_CLAMP_TO_EDGE : (texture->wrap_t ? texture->wrap_t : GL_REPEAT));
+        bool mip = nw > 0 && nh > 0 && !(nw & (nw-1)) && !(nh & (nh-1));
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, mip ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, normal);
+        if (mip) glGenerateMipmap(GL_TEXTURE_2D);
+        texture->has_normal = texture->normal_gltex != 0 && glGetError() == GL_NO_ERROR;
+        if (!texture->has_normal && texture->normal_gltex) { glDeleteTextures(1, &texture->normal_gltex); texture->normal_gltex=0; }
+        glActiveTexture(active);
+        free(normal);
+        if (opengl_prg) gfx_opengl_set_texture_uniforms(opengl_prg, opengl_curtex);
+    }
 }
 
 static uint32_t gfx_cm_to_opengl(uint32_t val) {
@@ -826,6 +1048,16 @@ static void gfx_opengl_set_sampler_parameters(int tile, bool linear_filter, uint
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, gfx_cm_to_opengl(cmt));
     opengl_curtex = tile;
     if (opengl_tex[tile]) {
+        struct GLTexture *texture = opengl_tex[tile];
+        texture->wrap_s = gfx_cm_to_opengl(cms);
+        texture->wrap_t = gfx_cm_to_opengl(cmt);
+        if (texture->normal_gltex) {
+            glActiveTexture(GL_TEXTURE3 + tile);
+            glBindTexture(GL_TEXTURE_2D, texture->normal_gltex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture->normal_clamp_edges ? GL_CLAMP_TO_EDGE : texture->wrap_s);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture->normal_clamp_edges ? GL_CLAMP_TO_EDGE : texture->wrap_t);
+            glActiveTexture(GL_TEXTURE0 + tile);
+        }
         opengl_tex[tile]->filter = linear_filter;
         gfx_opengl_set_texture_uniforms(opengl_prg, tile);
     }
@@ -973,6 +1205,7 @@ bool gfx_opengl_shadow_ready(void) { return sShadowMap.valid; }
 static void gfx_opengl_shutdown(void) {
     gfx_shadow_map_destroy();
     experimental_post_destroy();
+    for (int i=0; i<num_textures; ++i) if (tex_cache[i].normal_gltex) glDeleteTextures(1, &tex_cache[i].normal_gltex);
 }
 
 struct GfxRenderingAPI gfx_opengl_api = {

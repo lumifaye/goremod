@@ -20,6 +20,8 @@ jobs:
         run: git fetch --no-tags --depth=1 origin fdfff4b17e812e6caa2724ce82bbcb4b796452c5
       - name: Exercise coordinator, ICE and UDP in both hosting directions
         run: python3 fork/tests/coopnet_integration_test.py
+      - name: Install shader validator
+        run: sudo apt-get update && sudo apt-get install -y glslang-tools
       - name: Check release staging and graphics defaults
         run: |
           python3 fork/tests/coopnet_staging_test.py
@@ -29,13 +31,14 @@ jobs:
           python3 fork/tests/post_failure_test.py
           python3 fork/tests/android_texture_precision_test.py
           python3 fork/tests/android_startup_lighting_test.py
+          python3 fork/tests/normal_maps_port_test.py
           python3 fork/tests/save_complete_test.py
           python3 fork/tests/graphics_compatibility_test.py
           python3 fork/tests/environment_graphics_test.py
           python3 fork/tests/directional_shadows_test.py
           python3 fork/tests/realtime_shadow_test.py
           python3 fork/tests/shadow_stability_metal_test.py
-          python3 fork/tests/flat_shadow_test.py
+          python3 fork/tests/flat_shadow_test.py /usr/bin/glslangValidator
           python3 fork/tests/animation_bounds_test.py
           python3 fork/tests/ci_release_test.py
       - name: Exercise game packet ordering, retry, acknowledgement and shutdown cleanup

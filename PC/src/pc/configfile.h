@@ -63,6 +63,7 @@ extern bool configBetterGraphicsCompatibility;
 extern bool configBetterGraphicsShadows;
 extern bool configBetterGraphicsPost;
 extern bool configBetterGraphicsSheen;
+extern bool configBetterGraphicsNormalMaps;
 extern bool         configShowFPS;
 extern bool         configShowPing;
 extern enum RefreshRateMode configFramerateMode;

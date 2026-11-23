@@ -37,9 +37,12 @@
 #include "pc/fs/fs.h"
 
 #include "pc/gfx/gfx_cc.h"
+#include "pc/gfx/gfx_normal_maps.h"
+#include "data/dynos.c.h"
 #include "gfx_wet_sheen.h"
 #include "gfx_experimental_sun.h"
 #include "gfx_shadow_range.h"
+#include "gfx_enhanced_lighting.h"
 #include "pc/gfx/gfx_pc.h"
 #include "pc/gfx/gfx_rendering_api.h"
 #include "pc/gfx/gfx_opengl.h"
@@ -120,7 +123,7 @@ struct GfxDimensions gfx_current_dimensions = { 0 };
 
 static bool dropped_frame = false;
 
-static float buf_vbo[MAX_BUFFERED * (32 * 3)] = { 0.0f }; // up to 32 floats per vertex including shadow coordinates
+static float buf_vbo[MAX_BUFFERED * (64 * 3)] = { 0.0f }; // generous headroom for optional normals and shadow coordinates
 static size_t buf_vbo_len = 0;
 static size_t buf_vbo_num_tris = 0;
 
@@ -585,8 +588,12 @@ static void import_texture_ci8(int tile) {
 
 static void import_texture(int tile) {
     tile = tile % MAX_TILES;
+    gfx_normal_maps_clear_pending_texture_name();
     extern s32 dynos_tex_import(void **output, void *ptr, s32 tile, void *grapi, void **hashmap, void *pool, s32 *poolpos, s32 poolsize);
     if (dynos_tex_import((void **) &rendering_state.textures[tile], (void *) rdp.loaded_texture[tile].addr, tile, gfx_rapi, (void **) gfx_texture_cache.hashmap, (void *) gfx_texture_cache.pool, (int *) &gfx_texture_cache.pool_pos, MAX_CACHED_TEXTURES)) { return; }
+    struct TextureInfo texture_info = { 0 };
+    if (rdp.loaded_texture[tile].addr && dynos_texture_get_from_data((const Texture *) rdp.loaded_texture[tile].addr, &texture_info))
+        gfx_normal_maps_set_pending_texture_name(texture_info.name);
     uint8_t fmt = rdp.texture_tile[tile].fmt;
     uint8_t siz = rdp.texture_tile[tile].siz;
 
@@ -601,6 +608,7 @@ static void import_texture(int tile) {
     }
 
     if (gfx_texture_cache_lookup(tile, &rendering_state.textures[tile], rdp.loaded_texture[tile].addr, fmt, siz)) {
+        gfx_normal_maps_clear_pending_texture_name();
         return;
     }
 
@@ -803,6 +811,14 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
     __m128 mat3 = _mm_load_ps(rsp.MP_matrix[3]);
 #endif
 
+    // The model matrix is constant for this vertex batch. Do the inverse
+    // transpose setup once rather than multiplying matrices per vertex.
+    Mat4 enhancedModel;
+    bool canEnhanceNormals = configBetterGraphics && !gFullbright && sHasInverseCameraMatrix &&
+        (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN);
+    if (canEnhanceNormals)
+        mtxf_mul(enhancedModel, rsp.modelview_matrix_stack[rsp.modelview_matrix_stack_size-1], sInverseCameraMatrix);
+
     for (size_t i = 0; i < n_vertices; i++, dest_index++) {
         const Vtx_t *v = &vertices[i].v;
         const Vtx_tn *vn = &vertices[i].n;
@@ -826,6 +842,7 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
 #endif
 
         x = gfx_adjust_x_for_aspect_ratio(x);
+        d->enhanced_normal_valid = false;
         d->shadow_world_valid = false;
         if (configBetterGraphics && !configBetterGraphicsCompatibility && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
             Vec3f world = {v->ob[0], v->ob[1], v->ob[2]};
@@ -915,28 +932,17 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                 }
             }
 
-            // Optional world-space hemisphere and warm directional fill.
-            // Only normally lit geometry is affected; fullbright and HUD
-            // retain their original colors. No global/mod lighting is changed.
-            if (configBetterGraphics && !gFullbright) {
-                Vec3f worldPos = { v->ob[0], v->ob[1], v->ob[2] };
-                Vec3f worldNormal = { nx / 127.0f, ny / 127.0f, nz / 127.0f };
-                gfx_local_to_world_space(worldPos, worldNormal);
-                // Degenerate or zero-scale models must not produce NaNs.
-                float normalLengthSq = worldNormal[0] * worldNormal[0]
-                                     + worldNormal[1] * worldNormal[1]
-                                     + worldNormal[2] * worldNormal[2];
-                if (normalLengthSq > 0.000001f) {
-                    vec3f_normalize(worldNormal);
-                    float sky = (worldNormal[1] + 1.0f) * 0.5f;
-                    float sun = worldNormal[0] * -0.35f + worldNormal[1] * 0.8f + worldNormal[2] * 0.48f;
-                    if (sky < 0.0f) sky = 0.0f;
-                    if (sky > 1.0f) sky = 1.0f;
-                    if (sun < 0.0f) sun = 0.0f;
-                    if (sun > 1.0f) sun = 1.0f;
-                    r += 7.0f * sky + 24.0f * sun;
-                    g += 10.0f * sky + 19.0f * sun;
-                    b += 15.0f * sky + 12.0f * sun;
+            // Carry a world-space normal to the GPU for per-fragment scene
+            // lighting. Keep vanilla vertex colors untouched and skip invalid
+            // transforms, fullbright and generated environment-map geometry.
+            if (canEnhanceNormals) {
+                Vec3f normal = { nx / 127.0f, ny / 127.0f, nz / 127.0f };
+                Vec3f worldNormal;
+                if (gfx_enhanced_world_normal(enhancedModel, normal, worldNormal)) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        d->enhanced_normal[axis] = (int8_t)roundf(worldNormal[axis] * 127.0f);
+                    }
+                    d->enhanced_normal_valid = true;
                 }
             }
 
@@ -1236,9 +1242,14 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->use_fog        = (rdp.other_mode_l >> 30)                       == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
+    cm->normal_mapping = configBetterGraphics && configBetterGraphicsNormalMaps && gfx_rapi == &gfx_opengl_api;
+    const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
+        (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
+        v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;
     const bool want_shadow = configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
         gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) && v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
+    cm->enhanced_lighting = false;
     cm->shadow_receiver = false;
 
     if (cm->texture_edge) {
@@ -1253,11 +1264,13 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     }
 
     struct ColorCombiner *comb = gfx_lookup_or_create_color_combiner(cm);
-    if (want_shadow) {
+    if (want_enhanced_lighting || want_shadow) {
         uint8_t num_inputs; bool used_textures[2];
         gfx_rapi->shader_get_info(comb->prg, &num_inputs, used_textures);
         unsigned attributes = 1 + num_inputs + used_textures[0] + used_textures[1] + cm->use_fog + cm->light_map;
-        if (attributes < 8) { cm->shadow_receiver = true; comb = gfx_lookup_or_create_color_combiner(cm); }
+        if (want_shadow && attributes < 8) { cm->shadow_receiver = true; ++attributes; }
+        if (want_enhanced_lighting && attributes < 8) { cm->enhanced_lighting = true; ++attributes; }
+        if (cm->shadow_receiver || cm->enhanced_lighting) comb = gfx_lookup_or_create_color_combiner(cm);
     }
     cm = &comb->cm;
 
@@ -1309,6 +1322,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
         buf_vbo[buf_vbo_len++] = v_arr[i]->y;
         buf_vbo[buf_vbo_len++] = z;
         buf_vbo[buf_vbo_len++] = w;
+        if (cm->enhanced_lighting) for (int axis=0;axis<3;axis++) buf_vbo[buf_vbo_len++] = v_arr[i]->enhanced_normal[axis] / 127.0f;
         if (cm->shadow_receiver) for (int axis=0;axis<3;axis++) buf_vbo[buf_vbo_len++] = v_arr[i]->shadow_world[axis];
         for (int32_t j = 0; j < 2; j++) {
             if (used_textures[j]) {

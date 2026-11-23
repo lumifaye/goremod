@@ -710,7 +710,7 @@ static inline void gfx_opengl_set_texture_uniforms(struct ShaderProgram *prg, co
             // runtime without re-uploading every decoded texture. The shader
             // remains unchanged when the option is disabled; only the
             // normal-map contribution is gated here.
-            const bool normal_enabled = (configVrNormalMaps || configBetterGraphics) && texture->has_normal;
+            const bool normal_enabled = (configVrNormalMaps || (configBetterGraphics && configBetterGraphicsNormalMaps)) && texture->has_normal;
             const GLuint desired_normal_texture =
                 normal_enabled ? texture->normal_gltex : 0;
             if (!prg->normal_uniform_valid[tile] ||
@@ -2208,7 +2208,7 @@ static void gfx_opengl_sync_normal_maps_state(void) {
         opengl_better_graphics_state != configBetterGraphics;
     const bool maps_changed =
         !opengl_normal_maps_state_valid ||
-        opengl_normal_maps_state != (configVrNormalMaps || configBetterGraphics);
+        opengl_normal_maps_state != (configVrNormalMaps || (configBetterGraphics && configBetterGraphicsNormalMaps));
     const bool strength_changed =
         !opengl_normal_map_strength_state_valid ||
         opengl_normal_map_strength_state != configVrNormalMapStrength;
@@ -2221,7 +2221,7 @@ static void gfx_opengl_sync_normal_maps_state(void) {
 
     opengl_better_graphics_state = configBetterGraphics;
     opengl_better_graphics_state_valid = true;
-    opengl_normal_maps_state = configVrNormalMaps || configBetterGraphics;
+    opengl_normal_maps_state = configVrNormalMaps || (configBetterGraphics && configBetterGraphicsNormalMaps);
     opengl_normal_maps_state_valid = true;
     opengl_normal_map_strength_state = configVrNormalMapStrength;
     opengl_normal_map_strength_state_valid = true;

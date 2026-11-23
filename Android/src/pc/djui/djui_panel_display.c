@@ -25,6 +25,7 @@ static void djui_panel_better_graphics_advanced(struct DjuiBase* caller) {
     djui_checkbox_create(body, "Realtime Shadows and Atmosphere", &configBetterGraphicsShadows, NULL);
     djui_checkbox_create(body, "Bloom, Sun Rays and Water Effects", &configBetterGraphicsPost, NULL);
     djui_checkbox_create(body, "Player Wet and Metal Sheen", &configBetterGraphicsSheen, NULL);
+    djui_checkbox_create(body, "Normal Map Materials", &configBetterGraphicsNormalMaps, NULL);
     djui_button_create(body, DLANG(MENU, BACK), DJUI_BUTTON_STYLE_BACK, djui_panel_menu_back);
     djui_panel_add(caller, panel, NULL);
 }
