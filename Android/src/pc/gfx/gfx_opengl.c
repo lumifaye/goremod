@@ -912,10 +912,13 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     glAttachShader(shader_program, vertex_shader);
     glAttachShader(shader_program, fragment_shader);
     glLinkProgram(shader_program);
+    glDeleteShader(vertex_shader);
+    glDeleteShader(fragment_shader);
 
     size_t cnt = 0;
 
     struct ShaderProgram *prg = &shader_program_pool[shader_program_pool_index];
+    if (prg->opengl_program_id) glDeleteProgram(prg->opengl_program_id);
     shader_program_pool_index = (shader_program_pool_index + 1) % CC_MAX_SHADERS;
     if (shader_program_pool_size < CC_MAX_SHADERS) { shader_program_pool_size++; }
 
@@ -1024,6 +1027,10 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     gfx_opengl_load_shader(prg);
 
     return prg;
+}
+
+bool gfx_opengl_shader_matches(const struct ShaderProgram *program, const struct ColorCombiner *combiner) {
+    return program && combiner && program->hash == combiner->hash;
 }
 
 static struct ShaderProgram *gfx_opengl_lookup_shader(struct ColorCombiner* cc) {

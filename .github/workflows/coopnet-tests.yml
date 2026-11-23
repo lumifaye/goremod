@@ -32,6 +32,7 @@ jobs:
           python3 fork/tests/android_texture_precision_test.py
           python3 fork/tests/android_startup_lighting_test.py
           python3 fork/tests/normal_maps_port_test.py
+          python3 fork/tests/shader_cache_reuse_test.py
           python3 fork/tests/save_complete_test.py
           python3 fork/tests/graphics_compatibility_test.py
           python3 fork/tests/environment_graphics_test.py

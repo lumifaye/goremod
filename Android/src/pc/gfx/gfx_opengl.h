@@ -6,6 +6,7 @@
 extern struct GfxRenderingAPI gfx_opengl_api;
 
 bool gfx_opengl_check_compatibility(void);
+bool gfx_opengl_shader_matches(const struct ShaderProgram *program, const struct ColorCombiner *combiner);
 void gfx_opengl_shadow_submit(const float *vertices, size_t count, const float center[3]);
 bool gfx_opengl_shadow_ready(void);
 void gfx_opengl_set_environment(const float eye[3], float waterLevel, bool underwater, float time);

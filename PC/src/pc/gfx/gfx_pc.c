@@ -310,17 +310,29 @@ static void gfx_generate_cc(struct ColorCombiner *cc) {
     gfx_cc_print(cc);
 }
 
+// The GL shader pool is a ring independent from the combiner ring. A cached
+// combiner can outlive the shader slot it points at, especially with the
+// extra Better Graphics variants. Never draw a material with a recycled slot.
+static struct ColorCombiner *gfx_revalidate_combiner(struct ColorCombiner *comb) {
+    if (gfx_rapi == &gfx_opengl_api && !gfx_opengl_shader_matches(comb->prg, comb)) {
+        gfx_flush(); // finish all triangles using the previous program first
+        comb->prg = gfx_lookup_or_create_shader_program(comb);
+    }
+    return comb;
+}
+
 static struct ColorCombiner *gfx_lookup_or_create_color_combiner(struct CombineMode* cm) {
     combine_mode_update_hash(cm);
 
     static struct ColorCombiner *prev_combiner;
     if (prev_combiner != NULL && prev_combiner->cm.hash == cm->hash) {
-        return prev_combiner;
+        return gfx_revalidate_combiner(prev_combiner);
     }
 
     for (size_t i = 0; i < color_combiner_pool_size; i++) {
         if (color_combiner_pool[i].cm.hash == cm->hash) {
-            return prev_combiner = &color_combiner_pool[i];
+            prev_combiner = &color_combiner_pool[i];
+            return gfx_revalidate_combiner(prev_combiner);
         }
     }
 
@@ -1243,7 +1255,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
     cm->normal_mapping = configBetterGraphics && configBetterGraphicsNormalMaps && gfx_rapi == &gfx_opengl_api;
-    const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
+    const bool want_enhanced_lighting = configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api &&
         (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
         v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;
     const bool want_shadow = configBetterGraphics && configBetterGraphicsShadows && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
