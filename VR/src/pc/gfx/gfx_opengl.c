@@ -58,7 +58,7 @@
 #if defined(__ANDROID__)
 #define SHADER_BINARY_CACHE_MAGIC 0x534D5652u
 // Increment whenever generated GLSL or the on-disk format changes.
-#define SHADER_BINARY_CACHE_VERSION 24u
+#define SHADER_BINARY_CACHE_VERSION 25u
 #define SHADER_BINARY_CACHE_MAX_BYTES (1024u * 1024u)
 
 struct ShaderBinaryCacheHeader {
@@ -394,6 +394,7 @@ struct ShaderProgram {
     GLint better_graphics_location;
     GLint shadow_sampler_location;
     GLint shadow_center_location;
+    GLint environment_eye_location, environment_state_location;
     bool normal_uniform_valid[2];
     GLuint last_normal_texture_id[2];
     bool last_normal_enabled[2];
@@ -474,6 +475,14 @@ static uint8_t opengl_attrib_layout_sizes[OPENGL_MAX_SHADER_ATTRIBUTES];
 static int opengl_curtex = 0;
 
 static uint32_t frame_count;
+static float sEnvironmentEye[3];
+static float sEnvironmentWater, sEnvironmentTime;
+static bool sEnvironmentUnderwater;
+void gfx_opengl_set_environment(const float eye[3], float waterLevel, bool underwater, float time) {
+    memcpy(sEnvironmentEye,eye,sizeof(sEnvironmentEye));
+    sEnvironmentWater=waterLevel; sEnvironmentUnderwater=underwater; sEnvironmentTime=time;
+}
+
 
 static bool gfx_opengl_z_is_from_0_to_1(void) {
     return false;
@@ -778,6 +787,8 @@ static void gfx_opengl_load_shader(struct ShaderProgram *new_prg) {
         gfx_queue_BindTexture(GL_TEXTURE_2D, sShadowMap.texture);
         gfx_queue_Uniform1i(new_prg->shadow_sampler_location, 4);
         gfx_queue_Uniform3f(new_prg->shadow_center_location, sShadowMap.center[0], sShadowMap.center[1], sShadowMap.center[2]);
+        gfx_queue_Uniform3f(new_prg->environment_eye_location,sEnvironmentEye[0],sEnvironmentEye[1],sEnvironmentEye[2]);
+        gfx_queue_Uniform3f(new_prg->environment_state_location,sEnvironmentTime,sEnvironmentUnderwater ? 1.0f : 0.0f,sEnvironmentWater);
         gfx_queue_ActiveTexture(GL_TEXTURE0 + opengl_curtex);
     }
     gfx_opengl_set_texture_uniforms(new_prg, 0);
@@ -1094,6 +1105,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
 #endif
         append_line(fs_buf, &fs_len, "uniform sampler2D uShadowMap;");
         append_line(fs_buf, &fs_len, "uniform vec3 uShadowCenter;");
+        append_line(fs_buf, &fs_len, "uniform vec3 uEnvironmentEye; uniform vec3 uEnvironmentState;");
     }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
@@ -1335,6 +1347,31 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "visibility += (sc.z-0.00125 <= closest) ? 1.0 : 0.0;");
         append_line(fs_buf, &fs_len, "}");
         append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.75,1.0,visibility/9.0);");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
+    // Restrained distance haze and animated water-light caustics. Only the
+    // opaque world-position path is eligible; never affect HUD/fullbright.
+    if (shadow_receiver) {
+        append_line(fs_buf, &fs_len, "float envDistance=length(vShadowWorld-uEnvironmentEye);");
+        append_line(fs_buf, &fs_len, "float aerial=smoothstep(3200.0,16000.0,envDistance)*0.10;");
+        append_line(fs_buf, &fs_len, "texel.rgb=mix(texel.rgb,vec3(0.66,0.73,0.80),aerial);");
+        append_line(fs_buf, &fs_len, "if(uEnvironmentState.y>0.5 && vShadowWorld.y<uEnvironmentState.z) {");
+        append_line(fs_buf, &fs_len, "float causticWave=sin(vShadowWorld.x*0.018+uEnvironmentState.x)*sin(vShadowWorld.z*0.021-uEnvironmentState.x*2.0);");
+        append_line(fs_buf, &fs_len, "float caustic=pow(max(causticWave,0.0),4.0)*(1.0-smoothstep(0.0,1800.0,uEnvironmentState.z-vShadowWorld.y));");
+        append_line(fs_buf, &fs_len, "texel.rgb+=texel.rgb*vec3(0.14,0.19,0.16)*caustic;");
+        append_line(fs_buf, &fs_len, "float underwaterFog=smoothstep(300.0,8000.0,envDistance)*0.22;");
+        append_line(fs_buf, &fs_len, "texel.rgb=mix(texel.rgb,vec3(0.14,0.34,0.42),underwaterFog);");
+        append_line(fs_buf, &fs_len, "}");
+    }
+    if (shadow_receiver && enhanced_lighting) {
+        // A very small sky-colored Fresnel rim suggests material reflectance.
+        append_line(fs_buf, &fs_len, "vec3 envView=uEnvironmentEye-vShadowWorld;");
+        append_line(fs_buf, &fs_len, "float envViewLen=dot(envView,envView); float envNormalLen=dot(vWorldNormal,vWorldNormal);");
+        append_line(fs_buf, &fs_len, "if(envViewLen>0.000001 && envNormalLen>0.000001){");
+        append_line(fs_buf, &fs_len, "float envFacing=max(dot(envView*inversesqrt(envViewLen),vWorldNormal*inversesqrt(envNormalLen)),0.0);");
+        append_line(fs_buf, &fs_len, "float envRim=pow(1.0-clamp(envFacing,0.0,1.0),4.0);");
+        append_line(fs_buf, &fs_len, "texel.rgb+=texel.rgb*vec3(0.025,0.035,0.05)*envRim;");
         append_line(fs_buf, &fs_len, "}");
     }
 
@@ -1675,6 +1712,8 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->better_graphics_location = -1;
     prg->shadow_sampler_location = shadow_receiver ? glGetUniformLocation(shader_program, "uShadowMap") : -1;
     prg->shadow_center_location = shadow_receiver ? glGetUniformLocation(shader_program, "uShadowCenter") : -1;
+    prg->environment_eye_location = shadow_receiver ? glGetUniformLocation(shader_program,"uEnvironmentEye") : -1;
+    prg->environment_state_location = shadow_receiver ? glGetUniformLocation(shader_program,"uEnvironmentState") : -1;
     for (int t = 0; t < 2; t++) {
         prg->normal_sampler_location[t] = -1;
         prg->normal_enabled_location[t] = -1;

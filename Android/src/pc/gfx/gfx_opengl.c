@@ -52,6 +52,7 @@ struct ShaderProgram {
     bool used_lightmap;
     bool world_geometry;
     GLint shadow_sampler, shadow_center;
+    GLint environment_eye_location, environment_state_location;
 };
 
 struct GLTexture {
@@ -75,6 +76,14 @@ static struct GLTexture *opengl_tex[2];
 static int opengl_curtex = 0;
 
 static uint32_t frame_count;
+static float sEnvironmentEye[3];
+static float sEnvironmentWater, sEnvironmentTime;
+static bool sEnvironmentUnderwater;
+void gfx_opengl_set_environment(const float eye[3], float waterLevel, bool underwater, float time) {
+    memcpy(sEnvironmentEye,eye,sizeof(sEnvironmentEye));
+    sEnvironmentWater=waterLevel; sEnvironmentUnderwater=underwater; sEnvironmentTime=time;
+}
+
 
 static bool gfx_opengl_z_is_from_0_to_1(void) {
     return false;
@@ -132,6 +141,8 @@ static void gfx_opengl_load_shader(struct ShaderProgram *new_prg) {
         glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D,sShadowMap.texture);
         glUniform1i(new_prg->shadow_sampler,2);
         glUniform3f(new_prg->shadow_center,sShadowMap.center[0],sShadowMap.center[1],sShadowMap.center[2]);
+        glUniform3f(new_prg->environment_eye_location,sEnvironmentEye[0],sEnvironmentEye[1],sEnvironmentEye[2]);
+        glUniform3f(new_prg->environment_state_location,sEnvironmentTime,sEnvironmentUnderwater ? 1.0f : 0.0f,sEnvironmentWater);
         glActiveTexture(active);
     }
 }
@@ -364,6 +375,7 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, VARYING_FS " vec3 vShadowWorld;");
 #endif
         append_line(fs_buf, &fs_len, "uniform sampler2D uShadowMap; uniform vec3 uShadowCenter;");
+        append_line(fs_buf, &fs_len, "uniform vec3 uEnvironmentEye; uniform vec3 uEnvironmentState;");
     }
     for (int t = 0; t < 2; t++) {
         if (ccf.used_textures[t]) {
@@ -551,6 +563,21 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
         append_line(fs_buf, &fs_len, "visibility += (sc.z-0.00125 <= closest) ? 1.0 : 0.0;");
         append_line(fs_buf, &fs_len, "}");
         append_line(fs_buf, &fs_len, "texel.rgb *= mix(0.75,1.0,visibility/9.0);");
+        append_line(fs_buf, &fs_len, "}");
+    }
+
+    // Restrained distance haze and animated water-light caustics. Only the
+    // opaque world-position path is eligible; never affect HUD/fullbright.
+    if (shadow_receiver) {
+        append_line(fs_buf, &fs_len, "float envDistance=length(vShadowWorld-uEnvironmentEye);");
+        append_line(fs_buf, &fs_len, "float aerial=smoothstep(3200.0,16000.0,envDistance)*0.10;");
+        append_line(fs_buf, &fs_len, "texel.rgb=mix(texel.rgb,vec3(0.66,0.73,0.80),aerial);");
+        append_line(fs_buf, &fs_len, "if(uEnvironmentState.y>0.5 && vShadowWorld.y<uEnvironmentState.z) {");
+        append_line(fs_buf, &fs_len, "float causticWave=sin(vShadowWorld.x*0.018+uEnvironmentState.x)*sin(vShadowWorld.z*0.021-uEnvironmentState.x*2.0);");
+        append_line(fs_buf, &fs_len, "float caustic=pow(max(causticWave,0.0),4.0)*(1.0-smoothstep(0.0,1800.0,uEnvironmentState.z-vShadowWorld.y));");
+        append_line(fs_buf, &fs_len, "texel.rgb+=texel.rgb*vec3(0.14,0.19,0.16)*caustic;");
+        append_line(fs_buf, &fs_len, "float underwaterFog=smoothstep(300.0,8000.0,envDistance)*0.22;");
+        append_line(fs_buf, &fs_len, "texel.rgb=mix(texel.rgb,vec3(0.14,0.34,0.42),underwaterFog);");
         append_line(fs_buf, &fs_len, "}");
     }
 
@@ -787,6 +814,8 @@ static struct ShaderProgram *gfx_opengl_create_and_load_new_shader(struct ColorC
     prg->uniform_locations[8] = glGetUniformLocation(shader_program, "uFilter");
     prg->shadow_sampler = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowMap") : -1;
     prg->shadow_center = shadow_receiver ? glGetUniformLocation(shader_program,"uShadowCenter") : -1;
+    prg->environment_eye_location = shadow_receiver ? glGetUniformLocation(shader_program,"uEnvironmentEye") : -1;
+    prg->environment_state_location = shadow_receiver ? glGetUniformLocation(shader_program,"uEnvironmentState") : -1;
 
     gfx_opengl_load_shader(prg);
 

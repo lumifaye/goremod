@@ -28,6 +28,7 @@
 
 #include "game/object_helpers.h"
 #include "game/camera.h"
+#include "game/display.h"
 #include "game/rendering_graph_node.h"
 
 #include "pc/configfile.h"
@@ -2953,6 +2954,19 @@ void gfx_run(Gfx *commands) {
             gfx_opengl_shadow_submit(NULL, 0, sShadowCaptureCenter);
         }
         sShadowVertexCount = 0;
+    }
+    if (configBetterGraphics && gfx_rapi == &gfx_opengl_api) {
+        Vec3f environmentEye = {gLakituState.pos[0], gLakituState.pos[1], gLakituState.pos[2]};
+        if (vr_is_active()) {
+            Vec3f head;
+            if (vr_get_stabilized_headset_world_position(head, false)) {
+                memcpy(environmentEye, head, sizeof(environmentEye));
+            }
+        }
+        float waterLevel = find_water_level(environmentEye[0],environmentEye[2]);
+        gfx_opengl_set_environment(environmentEye,waterLevel,
+                                   environmentEye[1] < waterLevel - 8.0f,
+                                   (float)(gGlobalTimer % 1800) * (6.28318530718f / 1800.0f));
     }
     gfx_run_dl(commands);
     if (sStereoEye == 0) {
