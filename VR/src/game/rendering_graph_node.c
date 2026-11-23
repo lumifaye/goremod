@@ -5958,7 +5958,16 @@ static void geo_process_master_list_sub(struct GraphNodeMasterList *node) {
                         G_CULL_BOTH
                     );
                 }
+                // Mark only player-owned model lists, never HUD or level geometry.
+                bool playerSheen = false;
+                if (currList->owner != NULL) {
+                    for (int player = 0; player < MAX_PLAYERS; ++player) {
+                        if (gMarioStates[player].marioObj == currList->owner) { playerSheen = true; break; }
+                    }
+                }
+                if (playerSheen) gSPPlayerSheen(gDisplayListHead++, true);
                 gSPDisplayList(gDisplayListHead++, currList->displayList);
+                if (playerSheen) gSPPlayerSheen(gDisplayListHead++, false);
                 if (flipBillboardFace) {
                     gSPSetGeometryMode(
                         gDisplayListHead++,

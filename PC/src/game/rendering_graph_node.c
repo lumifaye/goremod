@@ -547,7 +547,16 @@ static void geo_process_master_list_sub(struct GraphNodeMasterList *node) {
                 gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(currList->transformPrev),
                           G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH);
 
+                // Mark only player-owned model lists, never HUD or level geometry.
+                bool playerSheen = false;
+                if (currList->owner != NULL) {
+                    for (int player = 0; player < MAX_PLAYERS; ++player) {
+                        if (gMarioStates[player].marioObj == currList->owner) { playerSheen = true; break; }
+                    }
+                }
+                if (playerSheen) gSPPlayerSheen(gDisplayListHead++, true);
                 gSPDisplayList(gDisplayListHead++, currList->displayList);
+                if (playerSheen) gSPPlayerSheen(gDisplayListHead++, false);
 
                 currList = currList->next;
             }
@@ -577,6 +586,7 @@ static void geo_append_display_list(void *displayList, s16 layer) {
         listNode->displayList = displayList;
         listNode->next = 0;
         listNode->usingCamSpace = sUsingCamSpace;
+        listNode->owner = gCurGraphNodeProcessingObject;
         if (gCurGraphNodeMasterList->listHeads[layer] == 0) {
             gCurGraphNodeMasterList->listHeads[layer] = listNode;
         } else {

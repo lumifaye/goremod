@@ -40,6 +40,7 @@
 #include "pc/gfx/gfx_normal_maps.h"
 
 #include "pc/gfx/gfx_cc.h"
+#include "gfx_wet_sheen.h"
 #include "gfx_enhanced_lighting.h"
 #include "pc/gfx/gfx_pc.h"
 #include "gfx_ui_quad_clip.h"
@@ -53,6 +54,7 @@
 #define GFX_SHADER_WARMUP_PENDING_FILENAME "first-boot-after-rom.pending"
 
 u8 gGfxPcResetTex1 = 0;
+static bool sPlayerSheen = false;
 
 static struct TextureCache gfx_texture_cache = { 0 };
 static struct ColorCombiner color_combiner_pool[CC_MAX_SHADERS] = { 0 };
@@ -1312,6 +1314,15 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
                     }
                     d->enhanced_normal_valid = true;
                 }
+            }
+
+            if (configBetterGraphics && sPlayerSheen && !gFullbright && sHasInverseCameraMatrix &&
+                !(rsp.geometry_mode & G_TEXTURE_GEN)) {
+                Vec3f wetPos = {v->ob[0], v->ob[1], v->ob[2]};
+                Vec3f wetNormal = {nx / 127.0f, ny / 127.0f, nz / 127.0f};
+                gfx_local_to_world_space(wetPos, wetNormal);
+                float wet = gfx_wet_sheen(wetPos, wetNormal, gLakituState.pos);
+                r += 85.0f * wet; g += 92.0f * wet; b += 105.0f * wet;
             }
 
             d->color.r = r > 255.0f ? 255 : (uint8_t)r;
@@ -2674,6 +2685,7 @@ static void OPTIMIZE_O3 gfx_run_dl(Gfx* cmd) {
 
 
 static void gfx_sp_reset(void) {
+    sPlayerSheen = false;
     rsp.modelview_matrix_stack_size = 1;
     sLocalToWorldMatrixValid = false;
     rsp.current_num_lights = 2;
@@ -3369,6 +3381,9 @@ void OPTIMIZE_O3 ext_gfx_run_dl(Gfx* cmd) {
         case G_TRI2_EXT:
             djui_gfx_sp_simple_tri1(C0(16, 8) / 2, C0(8, 8) / 2, C0(0, 8) / 2);
             djui_gfx_sp_simple_tri1(C1(16, 8) / 2, C1(8, 8) / 2, C1(0, 8) / 2);
+            break;
+        case G_PLAYER_SHEEN_EXT:
+            sPlayerSheen = C0(0, 1) != 0;
             break;
         case G_TEXADDR_DJUI:
             sOnlyTextureChangeOnAddrChange = !(C0(0, 24) & 0x01);

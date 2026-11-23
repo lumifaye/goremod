@@ -63,6 +63,11 @@
 #define G_VTX_EXT          0x11
 #define G_TRI2_EXT         0x12
 #define G_TEXADDR_DJUI     0x13
+// Private renderer hint; brackets a player-owned display list.
+#define G_PLAYER_SHEEN_EXT 0x14
+#define gSPPlayerSheen(pkt, enabled) do { Gfx *_g = (Gfx *)(pkt); \
+    _g->words.w0 = _SHIFTL(G_PLAYER_SHEEN_EXT, 24, 8) | ((enabled) ? 1 : 0); \
+    _g->words.w1 = 0; } while (0)
 #define G_EXECUTE_DJUI     0xdd
 
 #define G_MTX_INVERSE_CAMERA_EXT   0x08
