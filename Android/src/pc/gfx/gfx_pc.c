@@ -827,7 +827,7 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
 
         x = gfx_adjust_x_for_aspect_ratio(x);
         d->shadow_world_valid = false;
-        if (configBetterGraphics && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
+        if (configBetterGraphics && !configBetterGraphicsCompatibility && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
             Vec3f world = {v->ob[0], v->ob[1], v->ob[2]};
             gfx_local_to_world_space(world, NULL);
             if (isfinite(world[0]) && isfinite(world[1]) && isfinite(world[2])) {
@@ -1124,7 +1124,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     struct GfxVertex *v2 = &rsp.loaded_vertices[vtx2_idx];
     struct GfxVertex *v3 = &rsp.loaded_vertices[vtx3_idx];
     struct GfxVertex *v_arr[3] = {v1, v2, v3};
-    if (sShadowVertices && configBetterGraphics && !gFullbright &&
+    if (sShadowVertices && configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright &&
         (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) &&
         v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
@@ -1222,7 +1222,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     cm->use_fog        = (rdp.other_mode_l >> 30)                       == G_BL_CLR_FOG;
     cm->light_map      = (rsp.geometry_mode & G_LIGHT_MAP_EXT)          == G_LIGHT_MAP_EXT;
     cm->world_geometry = gShaderFlagsEnabled && (v1->world_geometry && v2->world_geometry && v3->world_geometry);
-    const bool want_shadow = configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api &&
+    const bool want_shadow = configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
         gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) && v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
     cm->shadow_receiver = false;
@@ -2193,7 +2193,7 @@ void gfx_run(Gfx *commands) {
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
     if (gfx_rapi == &gfx_opengl_api) {
-        if (configBetterGraphics) {
+        if (configBetterGraphics && !configBetterGraphicsCompatibility) {
             if (!sShadowVertices) sShadowVertices=malloc((size_t)GFX_SHADOW_MAX_VERTICES*3*sizeof(float));
             gfx_opengl_shadow_submit(sShadowVertices,sShadowVertexCount,sShadowCaptureCenter);
             if (rendering_state.shader_program) {
@@ -2204,7 +2204,7 @@ void gfx_run(Gfx *commands) {
         } else gfx_opengl_shadow_submit(NULL,0,sShadowCaptureCenter);
         sShadowVertexCount=0;
     }
-    if (configBetterGraphics && gfx_rapi == &gfx_opengl_api) {
+    if (configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api) {
         Vec3f environmentEye = {gLakituState.pos[0], gLakituState.pos[1], gLakituState.pos[2]};
         float waterLevel = find_water_level(environmentEye[0],environmentEye[2]);
         gfx_opengl_set_environment(environmentEye,waterLevel,
@@ -2215,7 +2215,7 @@ void gfx_run(Gfx *commands) {
 }
 
 bool gfx_realtime_shadow_available(void) {
-    return configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api && gfx_opengl_shadow_ready();
+    return configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api && gfx_opengl_shadow_ready();
 }
 
 void gfx_end_frame_render(void) {
@@ -2224,7 +2224,7 @@ void gfx_end_frame_render(void) {
     // Post effects are currently restricted to flat OpenGL: warping a VR
     // projection can cause discomfort, and multisampled eye targets cannot be
     // copied portably on GLES2. Never run on a dropped frame.
-    if (!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api && true) {
+    if (!dropped_frame && configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api && true) {
         const float *eye = gLakituState.pos;
         float water = find_water_level(eye[0], eye[2]);
         float sun[2] = {0.5f, 0.5f};

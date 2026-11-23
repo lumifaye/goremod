@@ -166,6 +166,7 @@ extern ConfigStick configStick;
 extern enum GraphicsBackend configGraphicsBackend;
 extern unsigned int configFiltering;
 extern bool configBetterGraphics;
+extern bool configBetterGraphicsCompatibility;
 extern bool         configShowFPS;
 extern bool         configVrAutoStart;
 extern unsigned int configVrCameraMode;

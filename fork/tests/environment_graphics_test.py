@@ -6,7 +6,7 @@ for platform in ('PC','Android','VR'):
     base=root/platform/'src/pc/gfx'
     gl=(base/'gfx_opengl.c').read_text()
     pc=(base/'gfx_pc.c').read_text()
-    assert 'if (configBetterGraphics && gfx_rapi == &gfx_opengl_api)' in pc
+    assert 'if (configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api)' in pc
     assert 'find_water_level(environmentEye[0],environmentEye[2])' in pc
     assert 'environmentEye[1] < waterLevel - 8.0f' in pc
     assert 'gGlobalTimer % 1800' in pc

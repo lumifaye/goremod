@@ -7,7 +7,7 @@ assert headers[0] == headers[1] == headers[2]
 h = headers[0]
 for p in ('PC','Android','VR'):
     source = (root/p/'src/pc/gfx/gfx_pc.c').read_text()
-    assert '!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api' in source
+    assert '!dropped_frame && configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api' in source
     assert 'find_water_level(eye[0], eye[2])' in source
     assert source.index('gfx_rapi->end_frame();', source.index('void gfx_end_frame_render')) < source.index('gfx_opengl_experimental_post(', source.index('void gfx_end_frame_render'))
 assert '&& !vr_is_active()' in (root/'VR/src/pc/gfx/gfx_pc.c').read_text()

@@ -1174,7 +1174,7 @@ static void OPTIMIZE_O3 gfx_sp_vertex(size_t n_vertices, size_t dest_index, cons
         x = gfx_adjust_x_for_aspect_ratio(x);
 
         d->shadow_world_valid = false;
-        if (configBetterGraphics && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
+        if (configBetterGraphics && !configBetterGraphicsCompatibility && sHasInverseCameraMatrix && gfx_rapi == &gfx_opengl_api) {
             Vec3f world = {v->ob[0], v->ob[1], v->ob[2]};
             gfx_local_to_world_space(world, NULL);
             if (isfinite(world[0]) && isfinite(world[1]) && isfinite(world[2])) {
@@ -1522,7 +1522,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
 
     // Capture before camera-space culling: back-facing/offscreen triangles in
     // the submitted scene can still cast onto a visible surface.
-    if (sShadowVertices && configBetterGraphics && !gFullbright && sStereoEye != 1 &&
+    if (sShadowVertices && configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && sStereoEye != 1 &&
         (rsp.geometry_mode & G_ZBUFFER) && (rdp.other_mode_l & Z_UPD) &&
         !(rdp.other_mode_l & CVG_X_ALPHA) &&
         v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid &&
@@ -1645,7 +1645,7 @@ static void OPTIMIZE_O3 gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t 
     const bool want_enhanced_lighting = configBetterGraphics && !gFullbright &&
         (rsp.geometry_mode & G_LIGHTING) && !(rsp.geometry_mode & G_TEXTURE_GEN) &&
         v1->enhanced_normal_valid && v2->enhanced_normal_valid && v3->enhanced_normal_valid;
-    const bool want_shadow = configBetterGraphics && !gFullbright && gfx_rapi == &gfx_opengl_api &&
+    const bool want_shadow = configBetterGraphics && !configBetterGraphicsCompatibility && !gFullbright && gfx_rapi == &gfx_opengl_api &&
         gfx_opengl_shadow_ready() && (rsp.geometry_mode & G_ZBUFFER) &&
         (rdp.other_mode_l & Z_UPD) && !(rdp.other_mode_l & CVG_X_ALPHA) &&
         v1->shadow_world_valid && v2->shadow_world_valid && v3->shadow_world_valid;
@@ -2940,7 +2940,7 @@ void gfx_run(Gfx *commands) {
     //double t0 = gfx_wapi->get_time();
     gfx_rapi->start_frame();
     if (gfx_rapi == &gfx_opengl_api && sStereoEye != 1) {
-        if (configBetterGraphics) {
+        if (configBetterGraphics && !configBetterGraphicsCompatibility) {
             if (!sShadowVertices) sShadowVertices = malloc((size_t)GFX_SHADOW_MAX_VERTICES * 3 * sizeof(float));
             gfx_opengl_shadow_submit(sShadowVertices, sShadowVertexCount, sShadowCaptureCenter);
             if (rendering_state.shader_program) {
@@ -2955,7 +2955,7 @@ void gfx_run(Gfx *commands) {
         }
         sShadowVertexCount = 0;
     }
-    if (configBetterGraphics && gfx_rapi == &gfx_opengl_api) {
+    if (configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api) {
         Vec3f environmentEye = {gLakituState.pos[0], gLakituState.pos[1], gLakituState.pos[2]};
         if (vr_is_active()) {
             Vec3f head;
@@ -2993,7 +2993,7 @@ void gfx_end_frame_render(void) {
     // Post effects are currently restricted to flat OpenGL: warping a VR
     // projection can cause discomfort, and multisampled eye targets cannot be
     // copied portably on GLES2. Never run on a dropped frame.
-    if (!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api && !vr_is_active()) {
+    if (!dropped_frame && configBetterGraphics && !configBetterGraphicsCompatibility && gfx_rapi == &gfx_opengl_api && !vr_is_active()) {
         const float *eye = gLakituState.pos;
         float water = find_water_level(eye[0], eye[2]);
         float sun[2] = {0.5f, 0.5f};

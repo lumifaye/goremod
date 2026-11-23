@@ -3,7 +3,7 @@
 /* Single-frame OpenGL post process. The caller must flush all batched draws
  * first and supply the current target's full dimensions. Multisampled targets
  * cannot be copied portably on GLES2, so leave them untouched. */
-static struct { GLuint program, texture, buffer; int width, height; bool attempted; } sExperimentalPost;
+static struct { GLuint program, texture, buffer; int width, height, failedWidth, failedHeight; bool attempted; } sExperimentalPost;
 static GLuint experimental_post_shader(GLenum type, const char *src) {
     GLuint shader=glCreateShader(type); GLint ok=0;
     if (!shader) return 0;
@@ -41,6 +41,29 @@ static bool experimental_post_init(void) {
     sExperimentalPost.program=p; glGenTextures(1,&sExperimentalPost.texture); glGenBuffers(1,&sExperimentalPost.buffer);
     return sExperimentalPost.texture && sExperimentalPost.buffer;
 }
+// The default Android framebuffer is not guaranteed to be copy-compatible
+// with RGBA textures, and allocations can fail on memory-constrained GPUs.
+// A failed copy must never be drawn over the valid scene as a black texture.
+// The texture is already bound; this helper touches no other GL state.
+static bool experimental_post_copy(int width, int height) {
+    if (sExperimentalPost.failedWidth == width && sExperimentalPost.failedHeight == height) return false;
+    if (sExperimentalPost.width != width || sExperimentalPost.height != height) {
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+        if (glGetError() != GL_NO_ERROR) {
+            sExperimentalPost.failedWidth=width; sExperimentalPost.failedHeight=height;
+            sExperimentalPost.width=0; sExperimentalPost.height=0;
+            return false;
+        }
+        sExperimentalPost.width=width; sExperimentalPost.height=height;
+    }
+    glCopyTexSubImage2D(GL_TEXTURE_2D,0,0,0,0,0,width,height);
+    if (glGetError() != GL_NO_ERROR) {
+        sExperimentalPost.failedWidth=width; sExperimentalPost.failedHeight=height;
+        return false;
+    }
+    sExperimentalPost.failedWidth=0; sExperimentalPost.failedHeight=0;
+    return true;
+}
 static void experimental_post_render(int width, int height, bool underwater, float phase, const float sun[2], bool sunVisible) {
     if (width <= 0 || height <= 0) return;
     GLint samples=0, maxTexture=0;
@@ -56,14 +79,27 @@ static void experimental_post_render(int width, int height, bool underwater, flo
     glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_TYPE,&type); glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_NORMALIZED,&normalized);
     glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_STRIDE,&stride); glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING,&attribBuffer);
     glGetVertexAttribPointerv(0,GL_VERTEX_ATTRIB_ARRAY_POINTER,&pointer);
+    // Ignore earlier rendering errors, but never draw if our own setup or
+    // copy fails. Bound the drain to handle a lost context without hanging.
+    bool glReady = false;
+    for (int i=0; i<16; ++i) {
+        if (glGetError() == GL_NO_ERROR) { glReady = true; break; }
+    }
+    if (!glReady) { glActiveTexture(active); return; }
     glBindTexture(GL_TEXTURE_2D,sExperimentalPost.texture);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    if (sExperimentalPost.width != width || sExperimentalPost.height != height) {
-        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
-        sExperimentalPost.width=width; sExperimentalPost.height=height;
+    if (glGetError() != GL_NO_ERROR) {
+        sExperimentalPost.failedWidth=width; sExperimentalPost.failedHeight=height;
+        glBindTexture(GL_TEXTURE_2D,texture);
+        glActiveTexture(active);
+        return;
     }
-    glCopyTexSubImage2D(GL_TEXTURE_2D,0,0,0,0,0,width,height);
+    if (!experimental_post_copy(width,height)) {
+        glBindTexture(GL_TEXTURE_2D,texture);
+        glActiveTexture(active);
+        return;
+    }
     glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glDisable(GL_SCISSOR_TEST);
     glDepthMask(GL_FALSE); glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE); glViewport(0,0,width,height);
     glUseProgram(sExperimentalPost.program);

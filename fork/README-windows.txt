@@ -26,5 +26,11 @@ larger shadow map uses more GPU memory and bandwidth. This can cost performance,
 especially in VR, and may show a one-frame delay on moving objects. Turn it off at any time. Existing normal-map
 strength and gloss controls adjust the material lighting.
 
+Better Graphics Compatibility Mode is a separate Display setting, off by
+default here. Enable it for a lighter path: it keeps enhanced lighting and
+player sheen, restores built-in shadows, and disables the GPU shadow map,
+shadow-dependent scene effects and fullscreen effects. Hardware safety checks
+still apply when Compatibility Mode is off.
+
 Keep the included files and folders next to the executable. You need your own
 legally obtained Super Mario 64 US ROM; one is not included.
