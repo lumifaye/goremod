@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,7 @@
 #include "gfx_cc.h"
 #include "gfx_normal_maps.h"
 #include "gfx_rendering_api.h"
+#include "gfx_experimental_post.h"
 #include "gfx_pc.h"
 #include "gfx_gl_submission.h"
 #include "gfx_menu_target.h"
@@ -2251,7 +2253,12 @@ void gfx_opengl_shadow_submit(const float *vertices, size_t count, const float c
 }
 bool gfx_opengl_shadow_ready(void) { return sShadowMap.valid; }
 
+void gfx_opengl_experimental_post(int width, int height, bool underwater) {
+    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f);
+}
+
 static void gfx_opengl_shutdown(void) {
+    experimental_post_destroy();
     gfx_gl_queue_shutdown();
     gfx_shadow_map_destroy();
     gfx_opengl_destroy_menu_target();

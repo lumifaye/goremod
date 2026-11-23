@@ -24,6 +24,7 @@
 
 #include "engine/lighting_engine.h"
 #include "engine/math_util.h"
+#include "engine/surface_collision.h"
 
 #include "game/object_helpers.h"
 #include "game/camera.h"
@@ -2974,6 +2975,15 @@ void gfx_run(Gfx *commands) {
 void gfx_end_frame_render(void) {
     gfx_flush();
     gfx_rapi->end_frame();
+    // Post effects are currently restricted to flat OpenGL: warping a VR
+    // projection can cause discomfort, and multisampled eye targets cannot be
+    // copied portably on GLES2. Never run on a dropped frame.
+    if (!dropped_frame && configBetterGraphics && gfx_rapi == &gfx_opengl_api && !vr_is_active()) {
+        const float *eye = gLakituState.pos;
+        float water = find_water_level(eye[0], eye[2]);
+        gfx_opengl_experimental_post(gfx_current_dimensions.width, gfx_current_dimensions.height,
+                                    eye[1] < water - 8.0f);
+    }
 }
 
 void gfx_display_frame(void) {

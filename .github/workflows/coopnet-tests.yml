@@ -25,6 +25,7 @@ jobs:
           python3 fork/tests/coopnet_staging_test.py
           python3 fork/tests/better_graphics_test.py
           python3 fork/tests/wet_sheen_test.py
+          python3 fork/tests/experimental_post_test.py
           python3 fork/tests/directional_shadows_test.py
           python3 fork/tests/realtime_shadow_test.py
           python3 fork/tests/animation_bounds_test.py

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #ifndef _LANGUAGE_C
 # define _LANGUAGE_C
@@ -30,6 +31,7 @@
 #include "../configfile.h"
 #include "gfx_cc.h"
 #include "gfx_rendering_api.h"
+#include "gfx_experimental_post.h"
 #include "gfx_pc.h"
 
 #define TEX_CACHE_STEP 512
@@ -878,7 +880,12 @@ static const char* gfx_opengl_get_name(void) {
     return "OpenGL";
 }
 
+void gfx_opengl_experimental_post(int width, int height, bool underwater) {
+    experimental_post_render(width, height, underwater, (float)(frame_count % 10000) * 0.05f);
+}
+
 static void gfx_opengl_shutdown(void) {
+    experimental_post_destroy();
 }
 
 struct GfxRenderingAPI gfx_opengl_api = {
